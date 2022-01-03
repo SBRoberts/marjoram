@@ -29,7 +29,7 @@
     "typescript": "^4.2.4"
   },
   "scripts": {
-    "build": "rm -rf dist/* && rollup -c rollup.config.js && tsc --emitDeclarationOnly",
+    "build": "rm -rf dist/* && rollup -c rollup.config.js && tsc --excludeDirectories demo/ --emitDeclarationOnly",
     "dev": "rollup -c rollup.config.dev.js -w",
     "test": "jest",
     "test:watch": "jest --watchAll",
