@@ -1,6 +1,6 @@
 {
   "name": "marjoram",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "main": "dist/marjoram.cjs.js",
   "module": "dist/marjoram.esm.js",
   "browser": "dist/marjoram.umd.js",
