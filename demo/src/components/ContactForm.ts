@@ -43,8 +43,6 @@ const inputConfig: InputProps[] = [
 ];
 
 export const ContactForm = (formProps?: any) => {
-  const viewModel = useViewModel({ isOpen: true });
-  const { $isOpen } = viewModel;
   const view = html`
     <div class="${formStyles}">
       <h2 id="form_label" class="form__label">Get in touch</h2>
@@ -52,8 +50,10 @@ export const ContactForm = (formProps?: any) => {
         ${inputConfig.map(Input)}
         <button ref="submitBtn" type="submit">Submit</button>
       </form>
+      <h3 class="form__disclaimer">❗️Uhhh... this isn't an actual form.</h3>
     </div>
   `;
+
   const { form } = view.collect();
 
   form?.addEventListener("submit", (e: FormSubmitEvent) => {
@@ -63,7 +63,7 @@ export const ContactForm = (formProps?: any) => {
     /* Submit form data
       fetch("api/some-endpoint", {
         body: formData,
-        method: "post",
+        method: "POST",
       }); 
     */
   });

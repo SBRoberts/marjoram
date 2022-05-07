@@ -329,9 +329,15 @@ export const cartItemStyles = css`
 
 export const formStyles = css`
   .form {
-    position: relative;
     display: flex;
     flex-direction: column;
+    position: relative;
+    &__disclaimer {
+      font-weight: 400;
+      font-size: 0.75em;
+      margin: 2em 0 0;
+      text-align: right;
+    }
     &__label {
       align-items: center;
       display: flex;
