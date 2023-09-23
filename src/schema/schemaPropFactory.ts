@@ -29,12 +29,10 @@ export class SchemaProp {
    * @param value The new value to assign to the schema property
    */
   update(value: SchemaPropValue) {
-    if (this.value !== value) {
-      const newValue = this.#expression ? this.#expression(value) : value;
-      this.#observers && this.#observers.forEach((notify) => notify(newValue));
+    const newValue = this.#expression ? this.#expression(value) : value;
+    this.#observers && this.#observers.forEach((notify) => notify(newValue));
 
-      this.value = newValue;
-    }
+    this.value = newValue;
 
     return this;
   }

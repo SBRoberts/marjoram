@@ -4,6 +4,7 @@ import typescript from "@rollup/plugin-typescript";
 import injectProcessEnv from "rollup-plugin-inject-process-env";
 import serve from "rollup-plugin-serve";
 import livereload from "rollup-plugin-livereload";
+import { terser } from "rollup-plugin-terser";
 
 import baseConfig from "./rollup.config";
 
@@ -18,6 +19,7 @@ const devConfig = {
       NODE_ENV: process.env.NODE_ENV,
     }),
     typescript(), // so Rollup can convert TypeScript to JavaScript
+    terser(), // so Rollup can mangle/minify distribution code
   ],
   watch: {
     include: ["demo/src/**/*", "src/**/*"],
