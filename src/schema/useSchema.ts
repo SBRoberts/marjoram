@@ -14,8 +14,8 @@ export const useSchema = function (instance?: Schema): Schema {
     props: [],
     defineProperty(value, key?) {
       // Handle schemaProps provided as values
-      if (SchemaProp.prototype.isPrototypeOf(value)) {
-        const schemaProp = <SchemaProp>value;
+      if (value instanceof SchemaProp) {
+        const schemaProp = value;
         const { id } = schemaProp;
 
         // Does the schema prop exist in this schema already?

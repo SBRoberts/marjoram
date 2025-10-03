@@ -6,7 +6,6 @@ import {
   getByText,
   waitFor,
 } from "@testing-library/dom";
-import "@testing-library/jest-dom/extend-expect";
 
 import { html, useViewModel, ViewModel } from "../../src";
 import { SchemaProp } from "../../src/schema";
@@ -29,7 +28,7 @@ describe("View Model Tests", () => {
       testViewModelChange(text, newText);
     });
     it("should compute and render changes in view model", () => {
-      testViewModelCompute(text, newText, (text) => `${text} but computed`);
+      testViewModelCompute(text, newText, text => `${text} but computed`);
     });
   });
 
@@ -40,7 +39,7 @@ describe("View Model Tests", () => {
       testViewModelChange(number, newNumber);
     });
     it("should compute and render changes in view model", () => {
-      testViewModelCompute(number, newNumber, (number) => number * 3);
+      testViewModelCompute(number, newNumber, number => number * 3);
     });
   });
 

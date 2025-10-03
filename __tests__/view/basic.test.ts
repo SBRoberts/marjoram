@@ -4,7 +4,6 @@ import {
   getByTestId,
   waitFor,
 } from "@testing-library/dom";
-import "@testing-library/jest-dom/extend-expect";
 
 import { html } from "../../src";
 const TEST_ID = 12345;
@@ -40,7 +39,7 @@ describe("Basic View Rendering", () => {
     const listItemText = [`item 1`, `item 2`, `item 3`];
 
     const listItemViews = html`${listItemText.map(
-      (item) => html`<li data-testid="${TEST_ID}">${item}</li>`
+      item => html`<li data-testid="${TEST_ID}">${item}</li>`
     )}`;
 
     const listView = html` <ul ref="${ref}">
@@ -233,7 +232,7 @@ describe("Basic View Rendering", () => {
     const sectionEl = getByTestId(document.body, TEST_ID);
 
     // Assert that all of our refs are collected and actually on the DOM
-    Object.keys(data).forEach((ref) => {
+    Object.keys(data).forEach(ref => {
       const prop = data[ref];
       if (Array.isArray(prop)) {
         prop.forEach((item, index) => {

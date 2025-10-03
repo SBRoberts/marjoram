@@ -1,42 +1,76 @@
-import resolve from "rollup-plugin-node-resolve";
-import commonjs from "rollup-plugin-commonjs";
+import resolve from "@rollup/plugin-node-resolve";
+import commonjs from "@rollup/plugin-commonjs";
 import typescript from "@rollup/plugin-typescript";
 import { terser } from "rollup-plugin-terser";
-import pkg from "./package.json";
+
+// Use require for package.json since we're in CommonJS
+const pkg = require("./package.json");
+
+const external = ["tslib"];
+const globals = {
+  tslib: "tslib",
+};
 
 export default [
-  // browser-friendly UMD build
+  // UMD build for browsers
   {
     input: "./src/index.ts",
     output: {
       name: "marjoram",
       file: pkg.browser,
       format: "umd",
+      globals,
+      sourcemap: true,
     },
+    external,
     plugins: [
-      resolve(), // so Rollup can find `ms`
-      commonjs(), // so Rollup can convert `ms` to an ES module
-      typescript(), // so Rollup can convert TypeScript to JavaScript
-      terser(), // so Rollup can mangle/minify distribution code
+      resolve({
+        browser: true,
+        preferBuiltins: false,
+      }),
+      commonjs(),
+      typescript({
+        tsconfig: "./tsconfig.build.json",
+        sourceMap: true,
+        inlineSources: true,
+      }),
+      terser({
+        format: {
+          comments: false,
+        },
+      }),
     ],
   },
 
-  // CommonJS (for Node) and ES module (for bundlers) build.
-  // (We could have three entries in the configuration array
-  // instead of two, but it's quicker to generate multiple
-  // builds from a single configuration where possible, using
-  // an array for the `output` option, where we can specify
-  // `file` and `format` for each target)
+  // ESM and CJS builds
   {
     input: "./src/index.ts",
-    external: ["ms"],
+    external,
     plugins: [
-      typescript(), // so Rollup can convert TypeScript to JavaScript
-      terser(), // so Rollup can mangle/minify distribution code
+      resolve(),
+      typescript({
+        tsconfig: "./tsconfig.build.json",
+        sourceMap: true,
+        inlineSources: true,
+      }),
+      terser({
+        format: {
+          comments: false,
+        },
+      }),
     ],
     output: [
-      { file: pkg.main, format: "cjs" },
-      { file: pkg.module, format: "es" },
+      {
+        file: pkg.main,
+        format: "cjs",
+        sourcemap: true,
+        exports: "named",
+      },
+      {
+        file: pkg.module,
+        format: "es",
+        sourcemap: true,
+      },
     ],
   },
 ];
