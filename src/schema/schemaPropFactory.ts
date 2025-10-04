@@ -12,15 +12,33 @@ export class SchemaProp {
   value: any;
   id: string;
 
+  // Array methods (when value is an array)
+  map?: typeof Array.prototype.map;
+  filter?: typeof Array.prototype.filter;
+  forEach?: typeof Array.prototype.forEach;
+  find?: typeof Array.prototype.find;
+  reduce?: typeof Array.prototype.reduce;
+  length?: number;
+
   // Private Fields
   #expression?: SchemaPropExpression;
   #observers: { (newValue: SchemaPropValue): void }[] = [];
 
-  constructor(schema: Schema, key: string, value: any) {
+  constructor(schema: Schema, key: string, value: unknown) {
     this.key = key;
     this.value = value;
-    this.id = "_" + Math.random().toString(36).substr(2, 9);
+    this.id = "_" + Math.random().toString(36).slice(2, 9);
     this.compute = this.compute.bind(this, schema);
+
+    // If the value is an array, expose array methods
+    if (Array.isArray(value)) {
+      this.map = value.map.bind(value);
+      this.filter = value.filter.bind(value);
+      this.forEach = value.forEach.bind(value);
+      this.find = value.find.bind(value);
+      this.reduce = value.reduce.bind(value);
+      this.length = value.length;
+    }
   }
   /**
    * Given a new value:
@@ -30,7 +48,7 @@ export class SchemaProp {
    */
   update(value: SchemaPropValue) {
     const newValue = this.#expression ? this.#expression(value) : value;
-    this.#observers && this.#observers.forEach((notify) => notify(newValue));
+    this.#observers && this.#observers.forEach(notify => notify(newValue));
 
     this.value = newValue;
 

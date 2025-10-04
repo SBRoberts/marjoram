@@ -71,8 +71,11 @@ export const useViewModel = function <TModel extends Model>(
 
       const prop = schema.getPropertyByKey(key);
 
-      // Return true if the prop isn't defined (allow new properties)
-      if (!prop) return true;
+      // If prop isn't defined, set it directly on the model (allow new properties)
+      if (!prop) {
+        Reflect.set(_model, key, value);
+        return true;
+      }
 
       prop.update(value);
 

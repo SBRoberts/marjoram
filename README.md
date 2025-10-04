@@ -18,11 +18,32 @@
 ## Table of Contents
 
 - [Getting Started](#getting-started)
+  - [Installation](#installation)
+  - [Quick Start](#quick-start)
 - [API Reference](#api-reference)
+  - [`html` - Template Literal Function](#html---template-literal-function)
+  - [`useViewModel` - Reactive State Management](#useviewmodel---reactive-state-management)
+  - [Computed Properties](#computed-properties)
 - [Examples](#examples)
+  - [Todo List Application](#todo-list-application)
+  - [Counter with Animation](#counter-with-animation)
+  - [Data Fetching with Loading States](#data-fetching-with-loading-states)
+  - [Form Validation](#form-validation)
 - [TypeScript Support](#typescript-support)
 - [Performance](#performance)
+  - [Benchmarks](#benchmarks)
+- [Current Limitations](#current-limitations)
+  - [Deep Nested Property Reactivity](#deep-nested-property-reactivity)
+  - [Array Mutation Reactivity](#array-mutation-reactivity)
+  - [Nested Object Property Addition](#nested-object-property-addition)
+  - [TypeScript Array Method Support](#typescript-array-method-support)
+  - [Performance Considerations](#performance-considerations)
+  - [Planned Improvements](#planned-improvements)
+- [Browser Support](#browser-support)
 - [Contributing](#contributing)
+  - [Development Setup](#development-setup)
+  - [Running Tests](#running-tests)
+- [License](#license)
 
 ---
 
@@ -546,6 +567,104 @@ Marjoram is designed for optimal performance:
 | Update 1000 items | 6ms | 4ms | 12ms |
 | Bundle size | 4.8KB | 0KB | 42KB |
 
+---
+
+## Current Limitations
+
+While Marjoram provides powerful reactive capabilities, there are some architectural limitations to be aware of:
+
+### Deep Nested Property Reactivity
+
+Deep nested property updates don't automatically trigger reactive updates:
+
+```typescript
+const viewModel = useViewModel({
+  user: {
+    profile: {
+      name: "John"
+    }
+  }
+});
+
+const view = html`<div>${viewModel.user.profile.name}</div>`;
+
+// ❌ This won't trigger a DOM update
+viewModel.user.profile.name = "Jane";
+
+// ✅ Workaround: Reassign the parent object
+viewModel.user = { 
+  ...viewModel.user, 
+  profile: { ...viewModel.user.profile, name: "Jane" } 
+};
+```
+
+### Array Mutation Reactivity
+
+Direct array mutations (push, pop, splice, etc.) don't trigger reactive updates:
+
+```typescript
+const viewModel = useViewModel({ items: ['a', 'b', 'c'] });
+
+const view = html`
+  <ul>
+    ${viewModel.$items.map(item => html`<li>${item}</li>`)}
+  </ul>
+`;
+
+// ❌ These won't trigger DOM updates
+viewModel.items.push('d');
+viewModel.items.pop();
+
+// ✅ Workaround: Reassign the entire array
+viewModel.items = [...viewModel.items, 'd'];
+viewModel.items = viewModel.items.slice(0, -1);
+```
+
+### Nested Object Property Addition
+
+Adding new properties to nested objects may not work as expected:
+
+```typescript
+const viewModel = useViewModel({ config: { theme: 'dark' } });
+
+// ❌ This might not work reliably
+viewModel.config.newProperty = 'value';
+
+// ✅ Better: Add properties at the top level
+viewModel.newProperty = 'value';
+```
+
+### TypeScript Array Method Support
+
+Due to TypeScript's type system, array methods on `SchemaProp` objects require type assertions:
+
+```typescript
+const viewModel = useViewModel({ items: [1, 2, 3] });
+
+// ❌ TypeScript error
+const doubled = viewModel.$items.map(x => x * 2);
+
+// ✅ Workaround: Use type assertion
+const doubled = (viewModel.$items as any).map(x => x * 2);
+```
+
+### Performance Considerations
+
+- **Large Object Updates**: Updating very large nested objects may not perform optimally
+- **Computed Properties**: Heavy computations in computed properties can impact performance
+- **Memory**: Long-lived applications should be mindful of observer cleanup
+
+### Planned Improvements
+
+These limitations are known and being addressed in future versions:
+
+- Deep reactivity for nested objects
+- Array mutation tracking
+- Better TypeScript support for SchemaProp array methods
+- Performance optimizations for large datasets
+
+For current workarounds and best practices, see the [examples](#examples) section above.
+
 ## Browser Support
 
 - Chrome 60+
@@ -595,4 +714,4 @@ MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-**Made with ❤️ by [Spencer Roberts](https://github.com/SBRoberts)**
+**Made with ❤️ by [Spencer Rose](https://github.com/SBRoberts)**

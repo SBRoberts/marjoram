@@ -23,6 +23,11 @@ export const interleaveTemplateLiteral = (
   args
     .reduce(
       (acc, arg, index) => {
+        // Handle null/undefined values directly without creating schema props
+        if (arg === null || arg === undefined) {
+          return [...acc, "", strings[index + 1]];
+        }
+
         const schemaProp = schema.defineProperty(arg, arg?.key);
         const argument = usePlaceholder(schema, schemaProp) || schemaProp.id;
         return [...acc, argument, strings[index + 1]];

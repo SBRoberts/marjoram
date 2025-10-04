@@ -24,8 +24,9 @@ const transformTextNode = (schemaProp: SchemaProp) => {
       if (Array.isArray(value)) {
         value.forEach(transformTextNode(schemaProp));
         node.textContent = node.textContent.replace(id, "");
-      } else if (typeof value !== "object") {
-        node.textContent = node.textContent.replace(id, value.toString());
+      } else if (typeof value !== "object" || value instanceof Date) {
+        const stringValue = value == null ? "" : value.toString();
+        node.textContent = node.textContent.replace(id, stringValue);
       }
     }
   };
