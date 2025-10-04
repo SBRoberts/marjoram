@@ -1,14 +1,6 @@
-import {
-  findAllByDisplayValue,
-  fireEvent,
-  getAllByTestId,
-  getByTestId,
-  getByText,
-  waitFor,
-} from "@testing-library/dom";
+import { getAllByTestId, getByTestId, getByText } from "@testing-library/dom";
 
 import { html, useViewModel, ViewModel } from "../../src";
-import { SchemaProp } from "../../src/schema";
 
 import {
   testViewModelChange,
@@ -22,8 +14,8 @@ describe("View Model Tests", () => {
   });
 
   describe("String Values", () => {
-    const text: string = "Hello, world!";
-    const newText: string = "This is new text";
+    const text = "Hello, world!";
+    const newText = "This is new text";
     it("should render changes in view model", () => {
       testViewModelChange(text, newText);
     });
@@ -110,7 +102,7 @@ describe("View Model Tests", () => {
       </ul>`;
       document.body.append(listView);
 
-      let elements = listView.collect();
+      listView.collect(); // Ensure collection works
       testListItemLengthAndDomContent(viewModel, listItemText.length);
       viewModel.items = [...viewModel.items, "item 4"];
 

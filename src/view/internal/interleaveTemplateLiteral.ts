@@ -17,18 +17,17 @@ const usePlaceholder = (
 // Interleave the template string's string and argument pieces together
 export const interleaveTemplateLiteral = (
   strings: TemplateStringsArray,
-  args: any[],
+  args: any[], // eslint-disable-line @typescript-eslint/no-explicit-any
   schema: Schema
 ): string =>
   args
     .reduce(
       (acc, arg, index) => {
-        // Handle null/undefined values directly without creating schema props
-        if (arg === null || arg === undefined) {
-          return [...acc, "", strings[index + 1]];
-        }
+        // Always define a schema property, even for null/undefined, to preserve reactivity
+        // eslint-disable-next-line eqeqeq
+        const safeArg = arg == null ? "" : arg;
 
-        const schemaProp = schema.defineProperty(arg, arg?.key);
+        const schemaProp = schema.defineProperty(safeArg, safeArg?.key);
         const argument = usePlaceholder(schema, schemaProp) || schemaProp.id;
         return [...acc, argument, strings[index + 1]];
       },

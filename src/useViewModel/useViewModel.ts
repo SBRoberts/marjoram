@@ -1,5 +1,5 @@
 import { SchemaProp, useSchema } from "../schema";
-import { Schema } from "../schema/types";
+import { Schema, SchemaPropValue } from "../schema/types";
 
 import { ViewModel, Model } from "./types";
 
@@ -36,10 +36,10 @@ export const useViewModel = function <TModel extends Model>(
       if (!(key in model)) return undefined;
 
       const prop = Reflect.get(model, key);
-      const isSchemaProp = SchemaProp.prototype.isPrototypeOf(prop);
+      const isSchemaProp = prop instanceof SchemaProp;
 
       // Our property exists in our model, but not necessarily our schema. Let's define it
-      const schemaProp = schema.defineProperty(prop, key);
+      const schemaProp = schema.defineProperty(prop as SchemaPropValue, key);
       Reflect.set(model, key, schemaProp);
 
       // To access a property in construction mode is to access the schema property. We are

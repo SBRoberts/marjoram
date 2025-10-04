@@ -1,5 +1,4 @@
 import { html } from "../../src";
-import { getByTestId } from "@testing-library/dom";
 
 const TEST_ID = "collection-test";
 

@@ -1,5 +1,5 @@
 import { html, useViewModel } from "../../src";
-import { getByTestId, getAllByTestId } from "@testing-library/dom";
+import { getByTestId } from "@testing-library/dom";
 
 const TEST_ID = "nested-test";
 

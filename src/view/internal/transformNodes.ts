@@ -1,8 +1,8 @@
 import { SchemaProp } from "../../schema";
 import { Schema, SchemaPropValue } from "../../schema/types";
-import { View } from "../types";
 
-const deriveArgType = (value: any) => {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const deriveArgType = (value: unknown) => {
   if (Array.isArray(value)) {
     return "array";
   }
@@ -16,8 +16,6 @@ const deriveArgType = (value: any) => {
 const transformTextNode = (schemaProp: SchemaProp) => {
   const { id, value } = schemaProp;
   return (node: Node) => {
-    const valueType = deriveArgType(value);
-
     // If the current text node contains the current id, do stuff
     if (node.textContent?.includes(id)) {
       schemaProp.observe(node, schemaProp);
@@ -25,7 +23,8 @@ const transformTextNode = (schemaProp: SchemaProp) => {
         value.forEach(transformTextNode(schemaProp));
         node.textContent = node.textContent.replace(id, "");
       } else if (typeof value !== "object" || value instanceof Date) {
-        const stringValue = value == null ? "" : value.toString();
+        const stringValue =
+          value === null || value === undefined ? "" : value.toString();
         node.textContent = node.textContent.replace(id, stringValue);
       }
     }

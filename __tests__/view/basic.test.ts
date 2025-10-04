@@ -1,9 +1,4 @@
-import {
-  fireEvent,
-  getAllByTestId,
-  getByTestId,
-  waitFor,
-} from "@testing-library/dom";
+import { fireEvent, getAllByTestId, getByTestId } from "@testing-library/dom";
 
 import { html } from "../../src";
 const TEST_ID = 12345;
@@ -51,10 +46,12 @@ describe("Basic View Rendering", () => {
 
     expect(listItemElements).toHaveLength(listItemText.length);
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const elementCollection = listView.collect();
   });
 
   test("should render a static view with multiple attributes", () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const ref = "image";
     const imageData = {
       img: "https://images.unsplash.com/photo-1519638399535-1b036603ac77?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=1789&q=80",
@@ -89,11 +86,13 @@ describe("Basic View Rendering", () => {
       imgAlt: "this is an alt tag",
     };
 
-    let safeImageSafe = true;
-    let dangerousImageSafe = true;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const safeImageSafe = true;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const dangerousImageSafe = true;
 
     const errorHandler = jest.fn();
-    // @ts-ignore
+    // @ts-expect-error Testing window property assignment for XSS testing
     window.errorHandler = errorHandler;
 
     // Modify image src to inject malicious code
@@ -134,7 +133,7 @@ describe("Basic View Rendering", () => {
     fireEvent.error(attackedElement);
     expect(errorHandler).toBeCalledTimes(1);
 
-    // @ts-ignore
+    // @ts-expect-error Testing window property cleanup after XSS testing
     window.errorHandler && delete window.errorHandler;
   });
 
@@ -183,10 +182,10 @@ describe("Basic View Rendering", () => {
 
     const elementCollection = sectionView.collect();
 
-    const sectionEl = getByTestId(document.body, TEST_ID);
+    getByTestId(document.body, TEST_ID); // Verify element exists
 
     // Assert that all of our refs are collected and actually on the DOM
-    for (let ref in refs) {
+    for (const ref in refs) {
       const el = elementCollection[ref];
       expect(elementCollection).toHaveProperty(ref);
       expect(el).toBeInTheDocument();
@@ -229,6 +228,7 @@ describe("Basic View Rendering", () => {
     document.body.append(sectionView);
 
     const elementCollection = sectionView.collect();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const sectionEl = getByTestId(document.body, TEST_ID);
 
     // Assert that all of our refs are collected and actually on the DOM

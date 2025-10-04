@@ -1,4 +1,4 @@
-import { Schema, SchemaPropValue } from "./types";
+import { Schema } from "./types";
 import { SchemaProp } from "./schemaPropFactory";
 
 /**
@@ -44,10 +44,10 @@ export const useSchema = function (instance?: Schema): Schema {
       return this.props.find(({ id: _id }) => _id === id);
     },
     hasProperty(key) {
-      return this.props.some((item) => item.key === key);
+      return this.props.some(item => item.key === key);
     },
     hasId(id) {
-      return this.ids.some((_id) => _id === id);
+      return this.ids.some(_id => _id === id);
     },
   };
 

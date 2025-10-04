@@ -7,14 +7,8 @@ export type SchemaPropValue =
   | Node
   | SchemaProp
   | SchemaPropValue[];
-type SchemaPropUpdate = (newValue: SchemaPropValue) => void;
-type SchemaPropCalc = (expression: () => string | number) => SchemaProp;
 export type SchemaPropNotify = (newValue: SchemaPropValue) => void;
 export type SchemaPropExpression = (value: SchemaPropValue) => SchemaPropValue;
-export type SchemaPropObserve = (
-  callback: SchemaPropNotify,
-  context: ThisParameterType<SchemaProp>
-) => void;
 
 interface SchemaMethods {
   defineProperty: (

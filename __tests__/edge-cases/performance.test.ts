@@ -178,7 +178,7 @@ describe("Performance & Memory Edge Cases", () => {
     });
 
     test("should handle large nested object updates", () => {
-      interface NestedData {
+      interface NestedData extends Record<string, unknown> {
         level1: {
           level2: {
             level3: {

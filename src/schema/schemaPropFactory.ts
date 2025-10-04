@@ -3,13 +3,12 @@ import {
   SchemaPropValue,
   SchemaPropNotify,
   SchemaPropExpression,
-  SchemaPropObserve,
 } from "./types";
 
 export class SchemaProp {
   // Public
   key: string;
-  value: any;
+  value: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   id: string;
 
   // Array methods (when value is an array)
@@ -27,7 +26,7 @@ export class SchemaProp {
   constructor(schema: Schema, key: string, value: unknown) {
     this.key = key;
     this.value = value;
-    this.id = "_" + Math.random().toString(36).slice(2, 9);
+    this.id = "_" + Math.random().toString(36).slice(2, 11);
     this.compute = this.compute.bind(this, schema);
 
     // If the value is an array, expose array methods

@@ -115,6 +115,7 @@ describe("Error Handling & Edge Cases", () => {
 
       // Should not crash when accessing deleted property
       expect(() => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const value = viewModel.name;
       }).not.toThrow();
 
@@ -125,6 +126,7 @@ describe("Error Handling & Edge Cases", () => {
       const viewModel = useViewModel({ name: "test" });
 
       expect(() => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const nonExistent = (viewModel as any).nonExistentProperty;
       }).not.toThrow();
 
