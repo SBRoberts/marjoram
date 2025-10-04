@@ -232,9 +232,9 @@ interface Todo {
 
 const TodoApp = () => {
   const viewModel = useViewModel({
-    todos: [] as Todo[],
+    todos: [] satisfies Todo[],
     newTodo: '',
-    filter: 'all' as 'all' | 'active' | 'completed'
+    filter: 'all' satisfies 'all' | 'active' | 'completed'
   });
 
   const filteredTodos = viewModel.$todos.compute(todos => {
@@ -366,9 +366,9 @@ interface User {
 
 const UserList = () => {
   const viewModel = useViewModel({
-    users: [] as User[],
+    users: [] satisfies User[],
     loading: false,
-    error: null as string | null
+    error: null satisfies string | null
   });
 
   const loadUsers = async () => {
@@ -423,7 +423,7 @@ const ContactForm = () => {
     name: '',
     email: '',
     message: '',
-    errors: {} as Record<string, string>,
+    errors: {} satisfies Record<string, string>,
     submitted: false
   });
 

@@ -91,8 +91,8 @@ const appendChildren =
     if (placeholder && (isElement(value) || isArrayOfElements)) {
       schemaProp.observe(placeholder, schemaProp);
       const arrayifiedVal = Array.isArray(value)
-        ? <Node[]>value
-        : [<Node>value];
+        ? (value satisfies Node[])
+        : ([value] satisfies Node[]);
 
       placeholder.replaceWith(...arrayifiedVal);
     }

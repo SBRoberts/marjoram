@@ -56,7 +56,7 @@ export const useViewModel = function <TModel extends Model>(
         typeof prop === "object" &&
         prop !== null &&
         !Array.isArray(prop) &&
-        !((prop as unknown) instanceof Node)
+        !(prop instanceof Node)
       ) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const proxified = new Proxy(prop, this as any);
