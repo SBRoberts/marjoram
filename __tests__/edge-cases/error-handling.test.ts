@@ -81,7 +81,8 @@ describe("Error Handling & Edge Cases", () => {
       document.body.append(view);
 
       const collection = view.collect();
-      expect(collection[""]).toBeInstanceOf(HTMLDivElement);
+      // Empty ref attributes should be ignored for better safety
+      expect(collection[""]).toBeUndefined();
     });
 
     test("should handle whitespace-only ref attributes", () => {

@@ -27,7 +27,7 @@ export const useSchema = function (instance?: Schema): Schema {
         return schemaProp;
       }
 
-      const schemaProp = new SchemaProp(this, key, value);
+      const schemaProp = new SchemaProp(this, key!, value);
 
       this.props.push(schemaProp);
       this.ids.push(schemaProp.id);
@@ -38,10 +38,10 @@ export const useSchema = function (instance?: Schema): Schema {
       return this.props.find(({ key: propKey }) => propKey === key);
     },
     getPropertyByValue(value): SchemaProp {
-      return this.props.find(({ value: propValue }) => propValue === value);
+      return this.props.find(({ value: propValue }) => propValue === value)!;
     },
     getPropertyById(id): SchemaProp {
-      return this.props.find(({ id: _id }) => _id === id);
+      return this.props.find(({ id: _id }) => _id === id)!;
     },
     hasProperty(key) {
       return this.props.some(item => item.key === key);

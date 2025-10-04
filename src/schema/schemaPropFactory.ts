@@ -11,14 +11,6 @@ export class SchemaProp {
   value: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   id: string;
 
-  // Array methods (when value is an array)
-  map?: typeof Array.prototype.map;
-  filter?: typeof Array.prototype.filter;
-  forEach?: typeof Array.prototype.forEach;
-  find?: typeof Array.prototype.find;
-  reduce?: typeof Array.prototype.reduce;
-  length?: number;
-
   // Private Fields
   #expression?: SchemaPropExpression;
   #observers: { (newValue: SchemaPropValue): void }[] = [];
@@ -27,17 +19,39 @@ export class SchemaProp {
     this.key = key;
     this.value = value;
     this.id = "_" + Math.random().toString(36).slice(2, 11);
-    this.compute = this.compute.bind(this, schema);
+    // Store schema for use in compute method
+    this.#schema = schema;
+  }
 
-    // If the value is an array, expose array methods
-    if (Array.isArray(value)) {
-      this.map = value.map.bind(value);
-      this.filter = value.filter.bind(value);
-      this.forEach = value.forEach.bind(value);
-      this.find = value.find.bind(value);
-      this.reduce = value.reduce.bind(value);
-      this.length = value.length;
-    }
+  // Private field to store schema
+  #schema: Schema;
+
+  // Helper method to get array methods dynamically
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private getArrayMethod<K extends keyof any[]>(methodName: K) {
+    return Array.isArray(this.value)
+      ? this.value[methodName].bind(this.value)
+      : undefined;
+  }
+
+  // Dynamic array method getters that always operate on current value
+  get map() {
+    return this.getArrayMethod("map");
+  }
+  get filter() {
+    return this.getArrayMethod("filter");
+  }
+  get forEach() {
+    return this.getArrayMethod("forEach");
+  }
+  get find() {
+    return this.getArrayMethod("find");
+  }
+  get reduce() {
+    return this.getArrayMethod("reduce");
+  }
+  get length() {
+    return Array.isArray(this.value) ? this.value.length : undefined;
   }
   /**
    * Given a new value:
@@ -67,8 +81,8 @@ export class SchemaProp {
   /**
    * Perform logic on your view model properties before rendering them.
    */
-  compute(schema: Schema, expression: SchemaPropExpression) {
-    const schemaProp = schema.defineProperty(expression(this.value));
+  compute(expression: SchemaPropExpression) {
+    const schemaProp = this.#schema.defineProperty(expression(this.value));
     schemaProp.#expression = expression;
 
     this.observe(schemaProp.update, schemaProp);
@@ -88,12 +102,11 @@ export class SchemaProp {
           newValue.toString()
         );
       } else if (Array.isArray(newValue)) {
-        parent.replaceChildren(...newValue);
+        parent?.replaceChildren(...newValue);
       } else {
-        node.textContent = node.textContent.replace(
-          oldValue.toString(),
-          newValue.toString()
-        );
+        node.textContent =
+          node.textContent?.replace(oldValue.toString(), newValue.toString()) ||
+          newValue.toString();
       }
     };
   }

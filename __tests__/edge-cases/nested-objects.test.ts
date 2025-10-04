@@ -262,6 +262,33 @@ describe("Nested Objects & Complex Data Structures", () => {
       viewModel.items.pop();
       spans = getByTestId(document.body, TEST_ID).querySelectorAll("span");
       expect(spans).toHaveLength(3);
+
+      // Test that array methods work with updated arrays (after reassignment)
+      viewModel.items = ["w", "x", "y", "z"];
+
+      // Array methods should now work with the new array
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((viewModel.$items as any).length).toBe(4);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect(
+        (viewModel.$items as any).map((item: string) => item.toUpperCase())
+      ).toEqual(["W", "X", "Y", "Z"]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect(
+        (viewModel.$items as any).filter((item: string) => item > "x")
+      ).toEqual(["y", "z"]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect(
+        (viewModel.$items as any).find((item: string) => item === "y")
+      ).toBe("y");
+
+      // Test reduce method
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const reduced = (viewModel.$items as any).reduce(
+        (acc: string, item: string) => acc + item,
+        ""
+      );
+      expect(reduced).toBe("wxyz");
     });
   });
 });

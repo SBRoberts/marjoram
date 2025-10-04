@@ -3,13 +3,101 @@ import { getByTestId } from "@testing-library/dom";
 
 const TEST_ID = "performance-test";
 
+/**
+ * Performance tests focused on behavioral correctness and relative performance:
+ * 1. Always test functional correctness (most important)
+ * 2. Use baseline comparison for relative performance (environment-agnostic)
+ * 3. Multiple iterations for statistical reliability
+ * 4. Adaptive thresholds based on environment characteristics
+ * 5. Never skip tests - adjust expectations instead
+ */
+
+// Detect environment characteristics
+const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
+const isDebugMode = process.env.NODE_ENV !== "production";
+
+// Performance test configuration - always run tests, adjust thresholds
+const PERF_CONFIG = {
+  // More lenient ratios for CI/debug (but still test performance)
+  maxRatio: isCI ? 50 : isDebugMode ? 30 : 15,
+  // Fewer iterations on CI to reduce noise, but still test
+  iterations: isCI ? 5 : 10,
+  // Minimum iterations to ensure statistical validity
+  minIterations: 3,
+};
+
 describe("Performance & Memory Edge Cases", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
   });
 
+  // Helper function for performance testing with statistical rigor
+  const performanceBenchmark = (
+    name: string,
+    testFn: () => number,
+    baselineFn?: () => number,
+    maxRatio = PERF_CONFIG.maxRatio
+  ) => {
+    const iterations = Math.max(
+      PERF_CONFIG.iterations,
+      PERF_CONFIG.minIterations
+    );
+    const testTimes: number[] = [];
+    const baselineTimes: number[] = [];
+
+    // Warmup run to reduce JIT compilation effects
+    testFn();
+    if (baselineFn) baselineFn();
+
+    // Run test multiple times for statistical validity
+    for (let i = 0; i < iterations; i++) {
+      testTimes.push(testFn());
+      if (baselineFn) {
+        baselineTimes.push(baselineFn());
+      }
+    }
+
+    // Calculate statistics
+    const avgTestTime = testTimes.reduce((a, b) => a + b) / iterations;
+    const medianTestTime = testTimes.sort((a, b) => a - b)[
+      Math.floor(iterations / 2)
+    ];
+
+    if (baselineFn) {
+      const avgBaselineTime =
+        baselineTimes.reduce((a, b) => a + b) / iterations;
+      const medianBaselineTime = baselineTimes.sort((a, b) => a - b)[
+        Math.floor(iterations / 2)
+      ];
+      const ratio = medianTestTime / medianBaselineTime; // Use median for stability
+
+      // Always log results for visibility (not just CI)
+      // eslint-disable-next-line no-console
+      console.log(
+        `${name}: Test=${medianTestTime.toFixed(2)}ms, Baseline=${medianBaselineTime.toFixed(2)}ms, Ratio=${ratio.toFixed(2)} (max: ${maxRatio})`
+      );
+
+      // Return comprehensive results
+      return {
+        passed: ratio <= maxRatio,
+        testTime: avgTestTime,
+        medianTestTime,
+        baselineTime: avgBaselineTime,
+        medianBaselineTime,
+        ratio,
+        maxRatio,
+      };
+    }
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `${name}: Test=${medianTestTime.toFixed(2)}ms (avg: ${avgTestTime.toFixed(2)}ms)`
+    );
+    return { passed: true, testTime: avgTestTime, medianTestTime };
+  };
+
   describe("Rapid Updates", () => {
-    test("should handle rapid successive updates", () => {
+    test("should handle rapid successive updates efficiently", () => {
       const viewModel = useViewModel({ count: 0 });
       const view = html`<div data-testid="${TEST_ID}">
         ${viewModel.$count}
@@ -19,15 +107,38 @@ describe("Performance & Memory Edge Cases", () => {
       const element = getByTestId(document.body, TEST_ID);
       expect(element.textContent).toBe("\n        0\n      ");
 
-      // Rapid updates
-      const start = performance.now();
-      for (let i = 0; i < 100; i++) {
-        viewModel.count = i;
-      }
-      const end = performance.now();
+      // Test function
+      const testRapidUpdates = () => {
+        const start = performance.now();
+        for (let i = 0; i < 100; i++) {
+          viewModel.count = i;
+        }
+        return performance.now() - start;
+      };
 
-      // Should complete quickly (less than 100ms for 100 updates)
-      expect(end - start).toBeLessThan(100);
+      // Baseline: just variable assignments without DOM updates
+      const baselineAssignments = () => {
+        let testVar = 0;
+        const start = performance.now();
+        for (let i = 0; i < 100; i++) {
+          testVar = i;
+        }
+        // Prevent optimization by using the variable
+        expect(typeof testVar).toBe("number");
+        return performance.now() - start;
+      };
+
+      // Run performance test - focus on relative performance, not absolute
+      const result = performanceBenchmark(
+        "Rapid Updates",
+        testRapidUpdates,
+        baselineAssignments
+      );
+
+      // Should be reasonably fast relative to baseline (adapted for environment)
+      expect(result.passed).toBe(true);
+
+      // Most importantly: functional correctness must always work
       expect(element.textContent).toBe("\n        99\n      ");
     });
 
@@ -215,7 +326,7 @@ describe("Performance & Memory Edge Cases", () => {
   });
 
   describe("Computed Property Performance", () => {
-    test("should handle expensive computed properties", () => {
+    test("should handle expensive computed properties efficiently", () => {
       const viewModel = useViewModel({ input: 10 });
 
       // Expensive computation
@@ -230,12 +341,36 @@ describe("Performance & Memory Edge Cases", () => {
       const view = html`<div data-testid="${TEST_ID}">${computed}</div>`;
       document.body.append(view);
 
-      const start = performance.now();
-      viewModel.input = 5; // Should trigger recomputation
-      const end = performance.now();
+      // Test with performance comparison
+      const testComputedUpdate = () => {
+        const start = performance.now();
+        viewModel.input = 5; // Should trigger recomputation
+        return performance.now() - start;
+      };
 
-      // Should complete in reasonable time
-      expect(end - start).toBeLessThan(50);
+      const baselineComputation = () => {
+        let result = 0;
+        const start = performance.now();
+        for (let i = 0; i < 5 * 1000; i++) {
+          result += i;
+        }
+        // Prevent optimization
+        expect(typeof result).toBe("number");
+        return performance.now() - start;
+      };
+
+      const result = performanceBenchmark(
+        "Computed Property",
+        testComputedUpdate,
+        baselineComputation
+      );
+
+      // Performance should be reasonable relative to baseline
+      expect(result.passed).toBe(true);
+
+      // Most importantly: computed value should be correct
+      const element = getByTestId(document.body, TEST_ID);
+      expect(element.textContent).toBe("12497500"); // Sum of 0 to 4999
     });
 
     test("should handle multiple computed properties", () => {

@@ -14,7 +14,7 @@
     "forceConsistentCasingInFileNames": true,
 
     /* Type Checking */
-    "strict": false,
+    "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "exactOptionalPropertyTypes": false,
@@ -22,8 +22,6 @@
     "noFallthroughCasesInSwitch": false,
     "noUncheckedIndexedAccess": false,
     "noImplicitOverride": false,
-    "noImplicitAny": false,
-    "strictNullChecks": false,
 
     /* Emit */
     "declaration": true,

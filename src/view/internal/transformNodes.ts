@@ -67,10 +67,10 @@ const transformContent = (element: Element) => {
   // Get all text nodes in current node as an array
   const textNodes = Array.from(childNodes).filter(
     ({ nodeType, textContent }) =>
-      nodeType === Node.TEXT_NODE && textContent.trim()
+      nodeType === Node.TEXT_NODE && textContent?.trim()
   );
 
-  // Loop through all of the current node's attributs/text and replace the given id w/ the intended value
+  // Loop through all of the current node's attributes/text and replace the given id w/ the intended value
   return (schemaProp: SchemaProp) => {
     transformTextNodes(textNodes, schemaProp);
     transformAttributes(attrs, schemaProp);
@@ -88,7 +88,7 @@ const appendChildren =
     const isElement = (value: SchemaPropValue) => value instanceof Node;
     const isArrayOfElements = Array.isArray(value) && value.every(isElement);
 
-    if (placeholder && (isElement || isArrayOfElements)) {
+    if (placeholder && (isElement(value) || isArrayOfElements)) {
       schemaProp.observe(placeholder, schemaProp);
       const arrayifiedVal = Array.isArray(value)
         ? <Node[]>value

@@ -118,7 +118,7 @@ describe("Basic View Rendering", () => {
     dangerousView.innerHTML = dangerousTemplate;
 
     // Append both elements to the dom
-    document.body.append(safeView, dangerousView.firstElementChild);
+    document.body.append(safeView, dangerousView.firstElementChild!);
 
     const safeElement = getByTestId(document.body, safeId);
     const attackedElement = getByTestId(document.body, dangerousId);
