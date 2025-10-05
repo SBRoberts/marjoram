@@ -53,12 +53,13 @@ describe("Nested Objects & Complex Data Structures", () => {
 
       const view = html`
         <div data-testid="${TEST_ID}">
-          ${(viewModel.$categories as any).map(
-            (category: any) =>
-              html`<div>
-                ${category.name}:
+          ${viewModel.$categories.map(
+            (category: any) => html`
+              <div>
+                <h3>${category.name}:</h3>
                 ${category.items.map((item: any) => item.name).join(", ")}
-              </div>`
+              </div>
+            `
           )}
         </div>
       `;
@@ -111,8 +112,8 @@ describe("Nested Objects & Complex Data Structures", () => {
 
       const view = html`
         <div data-testid="${TEST_ID}">
-          ${(viewModel.$mixed as any).map(
-            (item: any, index: number) =>
+          ${viewModel.$mixed.map(
+            (item: unknown, index: number) =>
               html`<span data-testid="item-${index}"
                 >${typeof item === "object" ? JSON.stringify(item) : item}</span
               >`
@@ -242,9 +243,7 @@ describe("Nested Objects & Complex Data Structures", () => {
 
       const view = html`
         <div data-testid="${TEST_ID}">
-          ${(viewModel.$items as any).map(
-            (item: string) => html`<span>${item}</span>`
-          )}
+          ${viewModel.$items.map((item: string) => html`<span>${item}</span>`)}
         </div>
       `;
       document.body.append(view);
@@ -268,23 +267,22 @@ describe("Nested Objects & Complex Data Structures", () => {
 
       // Array methods should now work with the new array
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((viewModel.$items as any).length).toBe(4);
+      expect(viewModel.$items.length).toBe(4);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect(
-        (viewModel.$items as any).map((item: string) => item.toUpperCase())
+        viewModel.$items.map((item: string) => item.toUpperCase())
       ).toEqual(["W", "X", "Y", "Z"]);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect(
-        (viewModel.$items as any).filter((item: string) => item > "x")
-      ).toEqual(["y", "z"]);
+      expect(viewModel.$items.filter((item: string) => item > "x")).toEqual([
+        "y",
+        "z",
+      ]);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect(
-        (viewModel.$items as any).find((item: string) => item === "y")
-      ).toBe("y");
+      expect(viewModel.$items.find((item: string) => item === "y")).toBe("y");
 
       // Test reduce method
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const reduced = (viewModel.$items as any).reduce(
+      const reduced = viewModel.$items.reduce(
         (acc: string, item: string) => acc + item,
         ""
       );

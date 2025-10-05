@@ -1,17 +1,6 @@
 import { SchemaProp } from "../../schema";
 import { Schema, SchemaPropValue } from "../../schema/types";
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const deriveArgType = (value: unknown) => {
-  if (Array.isArray(value)) {
-    return "array";
-  }
-  if (value instanceof DocumentFragment || value instanceof Element) {
-    return "element";
-  }
-  return typeof value;
-};
-
 // Replace the current text node's containing id w/ its intended value
 const transformTextNode = (schemaProp: SchemaProp) => {
   const { id, value } = schemaProp;

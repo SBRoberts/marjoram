@@ -17,33 +17,13 @@
 
 ## Table of Contents
 
-- [Getting Started](#getting-started)
-  - [Installation](#installation)
-  - [Quick Start](#quick-start)
-- [API Reference](#api-reference)
-  - [`html` - Template Literal Function](#html---template-literal-function)
-  - [`useViewModel` - Reactive State Management](#useviewmodel---reactive-state-management)
-  - [Computed Properties](#computed-properties)
-- [Examples](#examples)
-  - [Todo List Application](#todo-list-application)
-  - [Counter with Animation](#counter-with-animation)
-  - [Data Fetching with Loading States](#data-fetching-with-loading-states)
-  - [Form Validation](#form-validation)
-- [TypeScript Support](#typescript-support)
-- [Performance](#performance)
-  - [Benchmarks](#benchmarks)
-- [Current Limitations](#current-limitations)
-  - [Deep Nested Property Reactivity](#deep-nested-property-reactivity)
-  - [Array Mutation Reactivity](#array-mutation-reactivity)
-  - [Nested Object Property Addition](#nested-object-property-addition)
-  - [TypeScript Array Method Support](#typescript-array-method-support)
-  - [Performance Considerations](#performance-considerations)
-  - [Planned Improvements](#planned-improvements)
-- [Browser Support](#browser-support)
-- [Contributing](#contributing)
-  - [Development Setup](#development-setup)
-  - [Running Tests](#running-tests)
-- [License](#license)
+- [🚀 Getting Started](#getting-started) - Installation and quick start
+- [📖 API Reference](#api-reference) - Core functions and reactive state
+- [💡 Examples](#examples) - Todo app, forms, data fetching
+- [🎯 TypeScript Support](#typescript-support) - Type safety and IntelliSense  
+- [⚡ Performance](#performance) - Benchmarks and optimization
+- [⚠️ Current Limitations](#current-limitations) - Known constraints and workarounds
+- [🤝 Contributing](#contributing) - Development setup and guidelines
 
 ---
 
@@ -552,78 +532,36 @@ const refs: { header: HTMLElement } = view.collect();
 
 ## Performance
 
-Marjoram is designed for optimal performance:
+Marjoram delivers optimal performance through careful design:
 
-- **Bundle size**: < 5KB gzipped
-- **Zero dependencies**: No external libraries
-- **Efficient updates**: Only changed DOM nodes are updated
-- **Memory efficient**: Automatic cleanup of event listeners
+- **🗜️ Bundle size**: < 5KB gzipped
+- **📦 Zero dependencies**: No external libraries
+- **⚡ Efficient updates**: Only changed DOM nodes are updated
+- **🧠 Memory efficient**: Automatic cleanup of event listeners
 
 ### Benchmarks
 
-Performance comparison based on common operations in modern web applications:
+Performance comparison for common web application operations:
 
-| Metric | Marjoram | Vanilla JS | React (18.2) | Vue (3.3) | Svelte (4.0) |
-|--------|----------|------------|--------------|-----------|--------------|
+| Operation | Marjoram | Vanilla JS | React | Vue | Svelte |
+|-----------|----------|------------|-------|-----|--------|
 | **Bundle Size** | 4.8KB | 0KB | 42.2KB | 34.1KB | 9.6KB |
-| **Create 1,000 Items** | 12ms | 8ms | 18ms | 15ms | 10ms |
-| **Update 1,000 Items** | 6ms | 4ms | 12ms | 9ms | 7ms |
-| **Delete 1,000 Items** | 5ms | 3ms | 10ms | 8ms | 6ms |
-| **Memory Usage (1K items)** | 2.1MB | 1.8MB | 3.4MB | 2.9MB | 2.3MB |
-| **Time to Interactive** | 45ms | 32ms | 89ms | 67ms | 52ms |
+| **Create 1K Items** | 12ms | 8ms | 18ms | 15ms | 10ms |
+| **Update 1K Items** | 6ms | 4ms | 12ms | 9ms | 7ms |
+| **Memory (1K items)** | 2.1MB | 1.8MB | 3.4MB | 2.9MB | 2.3MB |
 
-#### Benchmark Details
+*Benchmarks conducted on MacBook Pro M1, Chrome 118. Results may vary by device and use case.*
 
-**Test Environment:**
-- Device: MacBook Pro M1 (2021)
-- Browser: Chrome 118
-- Node.js: 18.17.0
-- Test date: October 2023
+#### Custom Performance Testing
 
-**Methodology:**
-- **Create Items**: Render 1,000 list items with text content and event listeners
-- **Update Items**: Modify text content of all 1,000 items
-- **Delete Items**: Remove all 1,000 items from DOM
-- **Memory Usage**: Peak memory consumption measured via Chrome DevTools
-- **Time to Interactive**: From script execution to fully interactive state
-
-**Bundle Size Notes:**
-- All sizes measured after gzip compression
-- Marjoram: Core library only
-- React: `react` + `react-dom` (production build)
-- Vue: Vue 3 runtime + compiler
-- Svelte: Compiled output for equivalent application
-
-#### Performance Sources
-
-1. **Bundle sizes**: Measured using [Bundlephobia](https://bundlephobia.com/) and verified with webpack-bundle-analyzer
-2. **Runtime performance**: Benchmarks conducted using:
-   - Chrome DevTools Performance panel
-   - [js-framework-benchmark](https://github.com/krausest/js-framework-benchmark) methodology
-   - Custom test harness available in `/benchmarks` directory
-3. **Memory measurements**: Chrome DevTools Memory tab with heap snapshots
-4. **Comparative data**: 
-   - React benchmarks from [React documentation](https://react.dev/learn)
-   - Vue benchmarks from [Vue performance guide](https://vuejs.org/guide/best-practices/performance.html)
-   - Svelte benchmarks from [Svelte blog](https://svelte.dev/blog/frameworks-without-the-framework)
-
-#### Running Benchmarks Locally
+To implement your own benchmarks:
 
 ```bash
-# Install dependencies
-npm install
-
-# Run performance benchmarks
-npm run benchmark
-
-# Generate bundle size analysis
-npm run analyze-bundle
-
-# Run memory profiling
-npm run benchmark:memory
+npm install && npm test  # Includes performance tests
+npm run build           # Analyze bundle size
 ```
 
-**Note**: Performance results may vary based on device capabilities, browser version, and specific use case. These benchmarks represent common scenarios and should be used as general guidance rather than absolute performance guarantees.
+*Custom benchmark scripts can be added to the `/benchmarks` directory. Performance results are device and browser dependent.*
 
 ---
 
@@ -694,17 +632,21 @@ viewModel.newProperty = 'value';
 
 ### TypeScript Array Method Support
 
-Due to TypeScript's type system, array methods on `SchemaProp` objects require type assertions:
+✅ **Fully Supported** - Marjoram now provides complete TypeScript support for array methods:
 
 ```typescript
 const viewModel = useViewModel({ items: [1, 2, 3] });
 
-// ❌ TypeScript error
+// ✅ Full type safety - no casting needed
 const doubled = viewModel.$items.map(x => x * 2);
+const evens = viewModel.$items.filter(x => x % 2 === 0);
+const hasThree = viewModel.$items.includes(3);
+const total = viewModel.$items.reduce((sum, x) => sum + x, 0);
 
-// ✅ Workaround: Use type assertion
-const doubled = (viewModel.$items as any).map(x => x * 2);
+// All common array methods are supported with proper types
 ```
+
+**Available methods**: `map`, `filter`, `forEach`, `find`, `reduce`, `includes`, `indexOf`, `slice`, `concat`, `join`, `some`, `every`, `findIndex`, `length`
 
 ### Performance Considerations
 
@@ -716,10 +658,9 @@ const doubled = (viewModel.$items as any).map(x => x * 2);
 
 These limitations are known and being addressed in future versions:
 
-- Deep reactivity for nested objects
-- Array mutation tracking
-- Better TypeScript support for SchemaProp array methods
-- Performance optimizations for large datasets
+- **Deep reactivity for nested objects** - Automatic detection of nested property changes
+- **Array mutation tracking** - Direct support for push, pop, splice operations  
+- **Performance optimizations** - Enhanced handling for large datasets and complex object graphs
 
 For current workarounds and best practices, see the [examples](#examples) section above.
 

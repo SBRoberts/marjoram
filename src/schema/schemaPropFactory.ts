@@ -50,6 +50,30 @@ export class SchemaProp {
   get reduce() {
     return this.getArrayMethod("reduce");
   }
+  get includes() {
+    return this.getArrayMethod("includes");
+  }
+  get indexOf() {
+    return this.getArrayMethod("indexOf");
+  }
+  get slice() {
+    return this.getArrayMethod("slice");
+  }
+  get concat() {
+    return this.getArrayMethod("concat");
+  }
+  get join() {
+    return this.getArrayMethod("join");
+  }
+  get some() {
+    return this.getArrayMethod("some");
+  }
+  get every() {
+    return this.getArrayMethod("every");
+  }
+  get findIndex() {
+    return this.getArrayMethod("findIndex");
+  }
   get length() {
     return Array.isArray(this.value) ? this.value.length : undefined;
   }
