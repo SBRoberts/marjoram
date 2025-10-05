@@ -2,9 +2,10 @@ import resolve from "@rollup/plugin-node-resolve";
 import commonjs from "@rollup/plugin-commonjs";
 import typescript from "@rollup/plugin-typescript";
 import { terser } from "rollup-plugin-terser";
+import { readFileSync } from "fs";
 
-// Use require for package.json since we're in CommonJS
-const pkg = require("./package.json");
+// Read package.json using Node.js fs module to avoid mixed module syntax
+const pkg = JSON.parse(readFileSync("./package.json", "utf8"));
 
 const external = ["tslib"];
 const globals = {

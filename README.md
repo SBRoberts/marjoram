@@ -143,7 +143,7 @@ const view = html`
   <div>
     <h2>${viewModel.$name}</h2>
     <p>Age: ${viewModel.$age}</p>
-    <p>Status: ${viewModel.$active ? 'Active' : 'Inactive'}</p>
+    <p>Status: ${viewModel.$active.compute(v => v ? 'Active' : 'Inactive')}</p>
   </div>
 `;
 
@@ -239,9 +239,9 @@ const TodoApp = () => {
       </div>
 
       <div class="filters">
-        <button ref="allFilter" class="${viewModel.filter === 'all' ? 'active' : ''}">All</button>
-        <button ref="activeFilter" class="${viewModel.filter === 'active' ? 'active' : ''}">Active</button>
-        <button ref="completedFilter" class="${viewModel.filter === 'completed' ? 'active' : ''}">Completed</button>
+        <button ref="allFilter" class="${viewModel.$filter.compute(f => f === 'all' ? 'active' : '')}">All</button>
+        <button ref="activeFilter" class="${viewModel.$filter.compute(f => f === 'active' ? 'active' : '')}">Active</button>
+        <button ref="completedFilter" class="${viewModel.$filter.compute(f => f === 'completed' ? 'active' : '')}">Completed</button>
       </div>
 
       <ul class="todo-list">
@@ -297,7 +297,7 @@ const AnimatedCounter = () => {
   });
 
   const view = html`
-    <div class="counter ${viewModel.$isAnimating ? 'animating' : ''}">
+    <div class="counter ${viewModel.$isAnimating.compute(v => v ? 'animating' : '')}">
       <h2>Count: ${viewModel.$count}</h2>
       <div class="controls">
         <button ref="decrement">-</button>
@@ -371,8 +371,8 @@ const UserList = () => {
       <h2>Users</h2>
       <button ref="loadBtn">Load Users</button>
       
-      ${viewModel.$loading ? html`<p>Loading...</p>` : ''}
-      ${viewModel.$error ? html`<p class="error">${viewModel.$error}</p>` : ''}
+      ${viewModel.$loading.compute(v => v ? html`<p>Loading...</p>` : '')}
+      ${viewModel.$error.compute(v => v ? html`<p class="error">${v}</p>` : '')}
       
       <ul>
         ${viewModel.$users.compute(users => users.map(user => html`
@@ -458,9 +458,9 @@ const ContactForm = () => {
       
       <button type="submit" ref="submitBtn">Send Message</button>
       
-      ${viewModel.$submitted ? html`
+      ${viewModel.$submitted.compute(v => v ? html`
         <div class="success">Message sent successfully!</div>
-      ` : ''}
+      ` : '')}
     </form>
   `;
 
@@ -603,7 +603,7 @@ const viewModel = useViewModel({ items: ['a', 'b', 'c'] });
 
 const view = html`
   <ul>
-    ${viewModel.$items.map(item => html`<li>${item}</li>`)}
+    ${viewModel.$items.compute(items => items.map(item => html`<li>${item}</li>`))}
   </ul>
 `;
 
