@@ -18,8 +18,12 @@ const devConfig = {
     injectProcessEnv({
       NODE_ENV: process.env.NODE_ENV,
     }),
-    typescript(), // so Rollup can convert TypeScript to JavaScript
-    terser(), // so Rollup can mangle/minify distribution code
+    resolve({
+      browser: true,
+      preferBuiltins: false,
+    }),
+    commonjs(),
+    // Only minify in production builds - faster dev builds
   ],
   watch: {
     include: ["demo/src/**/*", "src/**/*"],

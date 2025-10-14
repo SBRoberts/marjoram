@@ -31,12 +31,100 @@
   "scripts": {
     "build": "rm -rf dist/* && rollup -c rollup.config.js && tsc --excludeDirectories demo/ --emitDeclarationOnly",
     "dev": "rollup -c rollup.config.dev.js -w",
+    "format": "prettier --write \"src/**/*.{ts,js,json}\" \"__tests__/**/*.{ts,js}\"",
+    "lint": "eslint \"src/**/*.{ts,js}\" \"__tests__/**/*.{ts,js}\" --fix",
     "test": "jest",
     "test:watch": "jest --watchAll",
-    "pretest": "yarn build",
-    "publish": "yarn build && npm publish --access=public"
+    "test:coverage": "jest --coverage",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run lint && npm run test",
+    "ci": "npm run check && npm run build",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run ci"
   },
-  "files": [
-    "./dist"
-  ]
+  "eslintConfig": {
+    "parser": "@typescript-eslint/parser",
+    "parserOptions": {
+      "ecmaVersion": 2020,
+      "sourceType": "module",
+      "project": "./tsconfig.json"
+    },
+    "plugins": [
+      "@typescript-eslint"
+    ],
+    "extends": [
+      "eslint:recommended",
+      "plugin:@typescript-eslint/recommended"
+    ],
+    "rules": {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          "argsIgnorePattern": "^_"
+        }
+      ],
+      "@typescript-eslint/explicit-function-return-type": "off",
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-inferrable-types": "error",
+      "@typescript-eslint/ban-ts-comment": "warn",
+      "prefer-const": "error",
+      "no-var": "error",
+      "no-console": "warn",
+      "no-prototype-builtins": "warn",
+      "eqeqeq": [
+        "error",
+        "always"
+      ]
+    },
+    "env": {
+      "browser": true,
+      "es2020": true,
+      "node": true,
+      "jest": true
+    },
+    "ignorePatterns": [
+      "dist/**/*",
+      "node_modules/**/*",
+      "coverage/**/*",
+      "*.config.js",
+      "setupTests.js"
+    ]
+  },
+  "prettier": {
+    "semi": true,
+    "trailingComma": "es5",
+    "singleQuote": false,
+    "printWidth": 80,
+    "tabWidth": 2,
+    "useTabs": false,
+    "bracketSpacing": true,
+    "arrowParens": "avoid",
+    "endOfLine": "lf",
+    "quoteProps": "as-needed"
+  },
+  "devDependencies": {
+    "@emotion/css": "^11.11.2",
+    "@rollup/plugin-commonjs": "^22.0.0",
+    "@rollup/plugin-node-resolve": "^13.3.0",
+    "@rollup/plugin-typescript": "^8.5.0",
+    "@testing-library/dom": "^9.3.4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@types/jest": "^29.5.14",
+    "@types/jsdom": "^27.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.54.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "jsdom": "^27.0.0",
+    "prettier": "^3.1.0",
+    "rimraf": "^5.0.5",
+    "rollup": "^2.79.1",
+    "rollup-plugin-livereload": "^2.0.5",
+    "rollup-plugin-serve": "^1.1.1",
+    "rollup-plugin-terser": "^7.0.2",
+    "ts-jest": "^29.1.1",
+    "tslib": "^2.6.2",
+    "typescript": "^5.2.2"
+  }
 }

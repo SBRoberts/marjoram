@@ -1,4 +1,39 @@
 /dist
+build/
+*.tsbuildinfo
+demo/dist/*.js
+demo/dist/*.map
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Logs
+logs
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment variables
 .env
 yarn-error.log
 .DS_Store
