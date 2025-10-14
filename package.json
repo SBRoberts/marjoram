@@ -1,6 +1,6 @@
 {
   "name": "marjoram",
-  "version": "0.0.6",
+  "version": "0.1.0",
   "description": "A lightweight JavaScript library to create and manipulate DOM elements and to manage their state",
   "keywords": [
     "dom",
