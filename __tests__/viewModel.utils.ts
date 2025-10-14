@@ -1,12 +1,4 @@
-import {
-  findAllByDisplayValue,
-  fireEvent,
-  getAllByTestId,
-  getByTestId,
-  getByText,
-  waitFor,
-} from "@testing-library/dom";
-import "@testing-library/jest-dom/extend-expect";
+import { getByTestId } from "@testing-library/dom";
 import { html, useViewModel } from "../src";
 export const TEST_ID = 12345;
 export type primitive = string | number | boolean;

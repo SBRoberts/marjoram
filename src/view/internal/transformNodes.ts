@@ -1,31 +1,20 @@
 import { SchemaProp } from "../../schema";
 import { Schema, SchemaPropValue } from "../../schema/types";
-import { View } from "../types";
-
-const deriveArgType = (value: any) => {
-  if (Array.isArray(value)) {
-    return "array";
-  }
-  if (value instanceof DocumentFragment || value instanceof Element) {
-    return "element";
-  }
-  return typeof value;
-};
 
 // Replace the current text node's containing id w/ its intended value
 const transformTextNode = (schemaProp: SchemaProp) => {
   const { id, value } = schemaProp;
   return (node: Node) => {
-    const valueType = deriveArgType(value);
-
     // If the current text node contains the current id, do stuff
     if (node.textContent?.includes(id)) {
       schemaProp.observe(node, schemaProp);
       if (Array.isArray(value)) {
         value.forEach(transformTextNode(schemaProp));
         node.textContent = node.textContent.replace(id, "");
-      } else if (typeof value !== "object") {
-        node.textContent = node.textContent.replace(id, value.toString());
+      } else if (typeof value !== "object" || value instanceof Date) {
+        const stringValue =
+          value === null || value === undefined ? "" : value.toString();
+        node.textContent = node.textContent.replace(id, stringValue);
       }
     }
   };
@@ -67,10 +56,10 @@ const transformContent = (element: Element) => {
   // Get all text nodes in current node as an array
   const textNodes = Array.from(childNodes).filter(
     ({ nodeType, textContent }) =>
-      nodeType === Node.TEXT_NODE && textContent.trim()
+      nodeType === Node.TEXT_NODE && textContent?.trim()
   );
 
-  // Loop through all of the current node's attributs/text and replace the given id w/ the intended value
+  // Loop through all of the current node's attributes/text and replace the given id w/ the intended value
   return (schemaProp: SchemaProp) => {
     transformTextNodes(textNodes, schemaProp);
     transformAttributes(attrs, schemaProp);
@@ -88,11 +77,11 @@ const appendChildren =
     const isElement = (value: SchemaPropValue) => value instanceof Node;
     const isArrayOfElements = Array.isArray(value) && value.every(isElement);
 
-    if (placeholder && (isElement || isArrayOfElements)) {
+    if (placeholder && (isElement(value) || isArrayOfElements)) {
       schemaProp.observe(placeholder, schemaProp);
       const arrayifiedVal = Array.isArray(value)
-        ? <Node[]>value
-        : [<Node>value];
+        ? (value satisfies Node[])
+        : ([value] satisfies Node[]);
 
       placeholder.replaceWith(...arrayifiedVal);
     }

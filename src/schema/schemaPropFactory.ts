@@ -3,24 +3,79 @@ import {
   SchemaPropValue,
   SchemaPropNotify,
   SchemaPropExpression,
-  SchemaPropObserve,
 } from "./types";
 
 export class SchemaProp {
   // Public
   key: string;
-  value: any;
+  value: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   id: string;
 
   // Private Fields
   #expression?: SchemaPropExpression;
   #observers: { (newValue: SchemaPropValue): void }[] = [];
 
-  constructor(schema: Schema, key: string, value: any) {
+  constructor(schema: Schema, key: string, value: unknown) {
     this.key = key;
     this.value = value;
-    this.id = "_" + Math.random().toString(36).substr(2, 9);
-    this.compute = this.compute.bind(this, schema);
+    this.id = "_" + Math.random().toString(36).slice(2, 11);
+    // Store schema for use in compute method
+    this.#schema = schema;
+  }
+
+  // Private field to store schema
+  #schema: Schema;
+
+  // Helper method to get array methods dynamically
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private getArrayMethod<K extends keyof any[]>(methodName: K) {
+    return Array.isArray(this.value)
+      ? this.value[methodName].bind(this.value)
+      : undefined;
+  }
+
+  // Dynamic array method getters that always operate on current value
+  get map() {
+    return this.getArrayMethod("map");
+  }
+  get filter() {
+    return this.getArrayMethod("filter");
+  }
+  get forEach() {
+    return this.getArrayMethod("forEach");
+  }
+  get find() {
+    return this.getArrayMethod("find");
+  }
+  get reduce() {
+    return this.getArrayMethod("reduce");
+  }
+  get includes() {
+    return this.getArrayMethod("includes");
+  }
+  get indexOf() {
+    return this.getArrayMethod("indexOf");
+  }
+  get slice() {
+    return this.getArrayMethod("slice");
+  }
+  get concat() {
+    return this.getArrayMethod("concat");
+  }
+  get join() {
+    return this.getArrayMethod("join");
+  }
+  get some() {
+    return this.getArrayMethod("some");
+  }
+  get every() {
+    return this.getArrayMethod("every");
+  }
+  get findIndex() {
+    return this.getArrayMethod("findIndex");
+  }
+  get length() {
+    return Array.isArray(this.value) ? this.value.length : undefined;
   }
   /**
    * Given a new value:
@@ -30,7 +85,7 @@ export class SchemaProp {
    */
   update(value: SchemaPropValue) {
     const newValue = this.#expression ? this.#expression(value) : value;
-    this.#observers && this.#observers.forEach((notify) => notify(newValue));
+    this.#observers && this.#observers.forEach(notify => notify(newValue));
 
     this.value = newValue;
 
@@ -50,8 +105,8 @@ export class SchemaProp {
   /**
    * Perform logic on your view model properties before rendering them.
    */
-  compute(schema: Schema, expression: SchemaPropExpression) {
-    const schemaProp = schema.defineProperty(expression(this.value));
+  compute(expression: SchemaPropExpression) {
+    const schemaProp = this.#schema.defineProperty(expression(this.value));
     schemaProp.#expression = expression;
 
     this.observe(schemaProp.update, schemaProp);
@@ -71,12 +126,11 @@ export class SchemaProp {
           newValue.toString()
         );
       } else if (Array.isArray(newValue)) {
-        parent.replaceChildren(...newValue);
+        parent?.replaceChildren(...newValue);
       } else {
-        node.textContent = node.textContent.replace(
-          oldValue.toString(),
-          newValue.toString()
-        );
+        node.textContent =
+          node.textContent?.replace(oldValue.toString(), newValue.toString()) ||
+          newValue.toString();
       }
     };
   }

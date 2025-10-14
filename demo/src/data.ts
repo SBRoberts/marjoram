@@ -1,23 +1,21 @@
-import { useViewModel } from "../../src";
-
 const CART = "cart";
 
 export type callbackType = (items: typeof products) => void;
 export type productsType = typeof products;
-export type productType = typeof products[0];
+export type productType = (typeof products)[0];
 
 const getCart = (): productsType => JSON.parse(localStorage.getItem(CART));
 
 export const cart = {
   total: 0,
   items: getCart() || [],
-  subscribers: [] as callbackType[],
+  subscribers: [] satisfies callbackType[],
   subscribe(callback: callbackType) {
     this.notify();
     this.subscribers.push(callback);
   },
   notify() {
-    this.subscribers.forEach((callback) => callback(this.items));
+    this.subscribers.forEach(callback => callback(this.items));
   },
   addItem(findId: number) {
     const cart = this.getAll();
