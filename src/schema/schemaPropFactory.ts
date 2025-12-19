@@ -14,6 +14,8 @@ export class SchemaProp {
   // Private Fields
   #expression?: SchemaPropExpression;
   #observers: { (newValue: SchemaPropValue): void }[] = [];
+  #pendingUpdate = false;
+  #pendingValue?: SchemaPropValue;
 
   constructor(schema: Schema, key: string, value: unknown) {
     this.key = key;
@@ -80,14 +82,32 @@ export class SchemaProp {
   /**
    * Given a new value:
    * 1. Update the schema property's value
-   * 2. Notify each observing property of the updated value
+   * 2. Notify each observing property of the updated value (batched via microtask queue)
    * @param value The new value to assign to the schema property
    */
   update(value: SchemaPropValue) {
     const newValue = this.#expression ? this.#expression(value) : value;
-    this.#observers && this.#observers.forEach(notify => notify(newValue));
-
+    
+    // Update value synchronously so reads are always current
     this.value = newValue;
+    
+    // Batch observer notifications to prevent layout thrashing
+    if (!this.#pendingUpdate) {
+      this.#pendingUpdate = true;
+      this.#pendingValue = newValue;
+      
+      queueMicrotask(() => {
+        this.#pendingUpdate = false;
+        const valueToNotify = this.#pendingValue as SchemaPropValue;
+        this.#pendingValue = undefined;
+        
+        // Notify all observers with the latest value
+        this.#observers && this.#observers.forEach(notify => notify(valueToNotify));
+      });
+    } else {
+      // If already pending, just update the pending value
+      this.#pendingValue = newValue;
+    }
 
     return this;
   }
@@ -118,8 +138,6 @@ export class SchemaProp {
     let oldValue = this.value;
     const parent = node.parentElement;
     return (newValue: typeof this.value): void => {
-      oldValue = this.value;
-
       if (node instanceof Attr) {
         node.value = node.value.replace(
           oldValue.toString(),
@@ -132,6 +150,9 @@ export class SchemaProp {
           node.textContent?.replace(oldValue.toString(), newValue.toString()) ||
           newValue.toString();
       }
+      
+      // Update oldValue AFTER the update for next time
+      oldValue = newValue;
     };
   }
 }
