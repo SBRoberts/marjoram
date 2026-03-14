@@ -59,10 +59,45 @@ const transformContent = (element: Element) => {
       nodeType === Node.TEXT_NODE && textContent?.trim()
   );
 
+  // Track which attrs have already been bound as event listeners (across schemaProp iterations)
+  const boundEventAttrs = new Set<Attr>();
+
   // Loop through all of the current node's attributes/text and replace the given id w/ the intended value
   return (schemaProp: SchemaProp) => {
+    const regularAttrs: Attr[] = [];
+
+    attrs.forEach(attr => {
+      // Skip attrs already wired as event listeners by a previous schemaProp iteration
+      if (boundEventAttrs.has(attr)) return;
+
+      // Inline event handler: onclick=${fn}, oninput=${fn}, etc.
+      if (
+        attr.name.startsWith("on") &&
+        attr.value === schemaProp.id &&
+        typeof schemaProp.value === "function"
+      ) {
+        boundEventAttrs.add(attr);
+        const eventName = attr.name.slice(2);
+        element.removeAttribute(attr.name);
+
+        let currentHandler = schemaProp.value as EventListener;
+        element.addEventListener(eventName, currentHandler);
+
+        // Support reactive handler replacement
+        schemaProp.observe(newHandler => {
+          element.removeEventListener(eventName, currentHandler);
+          if (typeof newHandler === "function") {
+            currentHandler = newHandler as EventListener;
+            element.addEventListener(eventName, currentHandler);
+          }
+        });
+      } else {
+        regularAttrs.push(attr);
+      }
+    });
+
     transformTextNodes(textNodes, schemaProp);
-    transformAttributes(attrs, schemaProp);
+    transformAttributes(regularAttrs, schemaProp);
   };
 };
 

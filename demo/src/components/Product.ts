@@ -21,22 +21,22 @@ export const Product = (product: productType) => {
         <h4 class="product__price">$${$price}</h4>
       </div>
       <div class="product__likesContainer">
-        <button ref="likeBtn" class="product__likeBtn">
+        <button onclick=${() => (state.likes += 1)} class="product__likeBtn">
           <span class="product__thumbsUp"> ${ThumbsUp()} </span>
           <span>${$likes}</span>
         </button>
       </div>
 
       <div class="product__cartContainer">
-        <button ref="cartBtn" class="product__likeBtn">Add To Cart</button>
+        <button
+          onclick=${() => cart.addItem(product.id)}
+          class="product__likeBtn"
+        >
+          Add To Cart
+        </button>
       </div>
     </div>
   `;
-
-  const { likeBtn, cartBtn } = element.collect();
-
-  likeBtn.addEventListener("click", () => (state.likes += 1));
-  cartBtn.addEventListener("click", () => cart.addItem(product.id));
 
   return element;
 };

@@ -44,10 +44,12 @@ pnpm add marjoram
 ```typescript
 import { html, useViewModel } from 'marjoram';
 
-// Create reactive state
+// Create reactive state with computed properties
 const viewModel = useViewModel({ 
   name: 'World', 
-  count: 0 
+  count: 0,
+  // Computed property - automatically updates when count changes
+  doubledCount: (vm) => vm.count * 2
 });
 
 // Create reactive view
@@ -55,6 +57,7 @@ const view = html`
   <div>
     <h1>Hello, ${viewModel.$name}!</h1>
     <p>Count: ${viewModel.$count}</p>
+    <p>Doubled: ${viewModel.$doubledCount}</p>
     <button ref="increment">+</button>
   </div>
 `;
@@ -62,7 +65,7 @@ const view = html`
 // Add event listeners
 const { increment } = view.collect();
 increment.addEventListener('click', () => {
-  viewModel.count++; // Automatically updates the DOM
+  viewModel.count++; // Updates DOM and recalculates computed properties
 });
 
 // Append to DOM
@@ -152,6 +155,60 @@ viewModel.name = 'Jane';
 viewModel.age = 25;
 ```
 
+#### Computed Properties at Model Definition
+
+Define computed properties as functions in your model - they recalculate whenever any property changes:
+
+```typescript
+const viewModel = useViewModel({
+  firstName: 'John',
+  lastName: 'Doe',
+  // Computed property - takes the viewModel as parameter
+  fullName: (vm) => `${vm.firstName} ${vm.lastName}`,
+  
+  price: 100,
+  quantity: 2,
+  // Computed properties can depend on other computed properties
+  subtotal: (vm) => vm.price * vm.quantity,
+  tax: (vm) => vm.subtotal * 0.1,
+  total: (vm) => vm.subtotal + vm.tax
+});
+
+const view = html`
+  <div>
+    <h2>${viewModel.$fullName}</h2>
+    <p>Total: $${viewModel.$total}</p>
+  </div>
+`;
+
+// Update any property - all computed properties recalculate
+viewModel.firstName = 'Jane';  // fullName becomes "Jane Doe"
+viewModel.price = 150;         // all computed properties recalculate
+```
+
+**Key Features:**
+- ⚠️ **Reactive recalculation**: Computed properties recalculate whenever ANY property in the viewModel changes (not just their dependencies)
+- ✅ **Read-only**: Attempting to set a computed property throws an error
+- ✅ **Chain-able**: Computed properties can depend on other computed properties
+- ✅ **Always fresh**: Reading a computed property always returns the current value
+
+**Note:** Currently, all computed properties recalculate when any property changes, regardless of whether they actually depend on the changed property. This ensures correctness but may impact performance with many computed properties. Fine-grained dependency tracking is planned for a future release.
+
+**Important:** Computed properties are read-only:
+
+```typescript
+const viewModel = useViewModel({
+  count: 5,
+  doubled: (vm) => vm.count * 2
+});
+
+// ❌ This throws an error
+viewModel.doubled = 100; // Error: Cannot set computed property "doubled"
+
+// ✅ Update the source property instead
+viewModel.count = 10; // doubled automatically becomes 20
+```
+
 #### The `$` Prefix Convention
 
 When using reactive properties in templates, prefix them with `$`:
@@ -174,26 +231,105 @@ viewModel.message = 'Updated!'; // DOM updates automatically
 
 ### Computed Properties
 
-Create derived values that update automatically:
+Marjoram offers two ways to create computed values, each optimized for different use cases:
+
+#### 1. Model-Level Computed Properties (Recommended)
+
+Define computed properties as functions in your model for multi-property dependencies:
+
+```typescript
+const viewModel = useViewModel({
+  firstName: 'John',
+  lastName: 'Doe',
+  email: 'john@example.com',
+  
+  // Computed property with access to entire viewModel
+  fullName: (vm) => `${vm.firstName} ${vm.lastName}`,
+  displayText: (vm) => `${vm.fullName} (${vm.email})`
+});
+
+// Use in templates
+const view = html`<div>${viewModel.$fullName}</div>`;
+
+// Access directly
+console.log(viewModel.fullName); // "John Doe"
+
+// Recalculates when any property changes
+viewModel.firstName = 'Jane';
+console.log(viewModel.fullName); // "Jane Doe"
+```
+
+**When to use:**
+- ✅ Deriving values from **multiple** properties
+- ✅ Complex calculations that need the entire viewModel context
+- ✅ Reusable computed values accessed in multiple places
+
+**Important:** Currently, computed properties recalculate whenever ANY property in the viewModel changes, not just their specific dependencies. This ensures correctness but may impact performance if you have many computed properties or expensive computations.
+
+#### 2. View-Time `.compute()` Method
+
+Chain `.compute()` for simple transformations of a single property:
 
 ```typescript
 const viewModel = useViewModel({ 
   firstName: 'John', 
-  lastName: 'Doe' 
+  active: true,
+  items: ['a', 'b', 'c']
 });
-
-const fullName = viewModel.$firstName.compute((first) => 
-  `${first} ${viewModel.lastName}`
-);
 
 const view = html`
   <div>
-    <p>Full name: ${fullName}</p>
+    <!-- Simple single-property transformation -->
+    <h1>${viewModel.$firstName.compute(name => name.toUpperCase())}</h1>
+    
+    <!-- Conditional rendering -->
+    <span>${viewModel.$active.compute(v => v ? 'Active' : 'Inactive')}</span>
+    
+    <!-- Array rendering -->
+    <ul>
+      ${viewModel.$items.compute(items => items.map(item => html`<li>${item}</li>`))}
+    </ul>
   </div>
 `;
+```
 
-// Computed value updates automatically
-viewModel.firstName = 'Jane';
+**When to use:**
+- ✅ Transforming a **single** property value
+- ✅ Template-specific formatting (e.g., uppercase, date formatting)
+- ✅ View-specific logic that doesn't belong in the model
+
+#### Comparison
+
+| Feature | Model-Level | View-Time `.compute()` |
+|---------|------------|------------------------|
+| **Define** | In viewModel | In template |
+| **Recalculation** | On ANY property change | Only when its property changes |
+| **Can access** | All viewModel properties | Single property value |
+| **Reusability** | High (use anywhere) | Low (template-specific) |
+| **Access** | `vm.propName` or `vm.$propName` | Only in templates via `vm.$prop` |
+| **Read-only** | Yes (throws on set) | N/A (not settable) |
+| **Performance** | May recalculate unnecessarily | More efficient (targeted) |
+| **Best for** | Multi-property derived state | Single-property transforms |
+
+**Example combining both:**
+
+```typescript
+const viewModel = useViewModel({
+  items: [{price: 10, qty: 2}, {price: 20, qty: 1}],
+  taxRate: 0.1,
+  
+  // Model-level: calculate subtotal from multiple items
+  subtotal: (vm) => vm.items.reduce((sum, item) => sum + (item.price * item.qty), 0),
+  total: (vm) => vm.subtotal * (1 + vm.taxRate)
+});
+
+const view = html`
+  <div>
+    <p>Subtotal: ${viewModel.$subtotal}</p>
+    <!-- View-time: format the total as currency -->
+    <p>Total: $${viewModel.$total.compute(t => t.toFixed(2))}</p>
+  </div>
+`;
 ```
 
 ---
@@ -214,15 +350,19 @@ const TodoApp = () => {
   const viewModel = useViewModel({
     todos: [] satisfies Todo[],
     newTodo: '',
-    filter: 'all' satisfies 'all' | 'active' | 'completed'
-  });
-
-  const filteredTodos = viewModel.$todos.compute(todos => {
-    switch (viewModel.filter) {
-      case 'active': return todos.filter(t => !t.completed);
-      case 'completed': return todos.filter(t => t.completed);
-      default: return todos;
-    }
+    filter: 'all' satisfies 'all' | 'active' | 'completed',
+    
+    // Computed properties for derived state
+    filteredTodos: (vm) => {
+      switch (vm.filter) {
+        case 'active': return vm.todos.filter(t => !t.completed);
+        case 'completed': return vm.todos.filter(t => t.completed);
+        default: return vm.todos;
+      }
+    },
+    
+    activeCount: (vm) => vm.todos.filter(t => !t.completed).length,
+    completedCount: (vm) => vm.todos.filter(t => t.completed).length
   });
 
   const view = html`
@@ -238,6 +378,11 @@ const TodoApp = () => {
         <button ref="addBtn">Add</button>
       </div>
 
+      <div class="stats">
+        <span>Active: ${viewModel.$activeCount}</span>
+        <span>Completed: ${viewModel.$completedCount}</span>
+      </div>
+
       <div class="filters">
         <button ref="allFilter" class="${viewModel.$filter.compute(f => f === 'all' ? 'active' : '')}">All</button>
         <button ref="activeFilter" class="${viewModel.$filter.compute(f => f === 'active' ? 'active' : '')}">Active</button>
@@ -245,7 +390,7 @@ const TodoApp = () => {
       </div>
 
       <ul class="todo-list">
-        ${filteredTodos.compute(todos => todos.map(todo => html`
+        ${viewModel.$filteredTodos.compute(todos => todos.map(todo => html`
           <li class="${todo.completed ? 'completed' : ''}">
             <input 
               type="checkbox" 
@@ -403,30 +548,19 @@ const ContactForm = () => {
     name: '',
     email: '',
     message: '',
-    errors: {} satisfies Record<string, string>,
-    submitted: false
+    submitted: false,
+    
+    // Computed validation properties
+    nameError: (vm) => !vm.name.trim() ? 'Name is required' : '',
+    emailError: (vm) => {
+      if (!vm.email.trim()) return 'Email is required';
+      if (!/\S+@\S+\.\S+/.test(vm.email)) return 'Email is invalid';
+      return '';
+    },
+    messageError: (vm) => !vm.message.trim() ? 'Message is required' : '',
+    
+    isValid: (vm) => !vm.nameError && !vm.emailError && !vm.messageError
   });
-
-  const validate = () => {
-    const errors: Record<string, string> = {};
-    
-    if (!viewModel.name.trim()) {
-      errors.name = 'Name is required';
-    }
-    
-    if (!viewModel.email.trim()) {
-      errors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(viewModel.email)) {
-      errors.email = 'Email is invalid';
-    }
-    
-    if (!viewModel.message.trim()) {
-      errors.message = 'Message is required';
-    }
-    
-    viewModel.errors = errors;
-    return Object.keys(errors).length === 0;
-  };
 
   const view = html`
     <form class="contact-form" ref="form">
@@ -435,28 +569,34 @@ const ContactForm = () => {
       <div class="field">
         <label>Name:</label>
         <input ref="nameInput" type="text" value="${viewModel.$name}" />
-        ${viewModel.$errors.compute(errors => 
-          errors.name ? html`<span class="error">${errors.name}</span>` : ''
+        ${viewModel.$nameError.compute(err => 
+          err ? html`<span class="error">${err}</span>` : ''
         )}
       </div>
       
       <div class="field">
         <label>Email:</label>
         <input ref="emailInput" type="email" value="${viewModel.$email}" />
-        ${viewModel.$errors.compute(errors => 
-          errors.email ? html`<span class="error">${errors.email}</span>` : ''
+        ${viewModel.$emailError.compute(err => 
+          err ? html`<span class="error">${err}</span>` : ''
         )}
       </div>
       
       <div class="field">
         <label>Message:</label>
         <textarea ref="messageInput">${viewModel.$message}</textarea>
-        ${viewModel.$errors.compute(errors => 
-          errors.message ? html`<span class="error">${errors.message}</span>` : ''
+        ${viewModel.$messageError.compute(err => 
+          err ? html`<span class="error">${err}</span>` : ''
         )}
       </div>
       
-      <button type="submit" ref="submitBtn">Send Message</button>
+      <button 
+        type="submit" 
+        ref="submitBtn"
+        ${viewModel.$isValid.compute(valid => valid ? '' : 'disabled')}
+      >
+        Send Message
+      </button>
       
       ${viewModel.$submitted.compute(v => v ? html`
         <div class="success">Message sent successfully!</div>
@@ -481,7 +621,7 @@ const ContactForm = () => {
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    if (validate()) {
+    if (viewModel.isValid) {
       viewModel.submitted = true;
       // Reset form after 3 seconds
       setTimeout(() => {
@@ -489,7 +629,6 @@ const ContactForm = () => {
         viewModel.email = '';
         viewModel.message = '';
         viewModel.submitted = false;
-        viewModel.errors = {};
       }, 3000);
     }
   });
@@ -577,6 +716,38 @@ npm run build           # Analyze bundle size
 
 While Marjoram provides powerful reactive capabilities, there are some architectural limitations to be aware of:
 
+### Function Properties as Computed
+
+**All functions in a viewModel are treated as computed properties:**
+
+```typescript
+const viewModel = useViewModel({
+  count: 5,
+  // ✅ This is a computed property (takes viewModel as parameter)
+  doubled: (vm) => vm.count * 2
+});
+
+// ❌ You cannot store regular functions in viewModels
+const viewModel = useViewModel({
+  count: 5,
+  increment: () => count++ // This will be treated as a computed property
+});
+```
+
+**Workaround:** Define actions and event handlers outside the viewModel:
+
+```typescript
+const viewModel = useViewModel({ count: 0 });
+
+// ✅ Define functions outside the viewModel
+const increment = () => viewModel.count++;
+const decrement = () => viewModel.count--;
+
+const view = html`<button ref="btn">Count: ${viewModel.$count}</button>`;
+const { btn } = view.collect();
+btn.addEventListener('click', increment);
+```
+
 ### Deep Nested Property Reactivity
 
 Deep nested property updates don't automatically trigger reactive updates:
@@ -659,8 +830,18 @@ const total = viewModel.$items.reduce((sum, x) => sum + x, 0);
 ### Performance Considerations
 
 - **Large Object Updates**: Updating very large nested objects may not perform optimally
-- **Computed Properties**: Heavy computations in computed properties can impact performance
+- **Computed Properties**: All computed properties recalculate on ANY property change. Heavy computations or many computed properties can impact performance. Consider using view-time `.compute()` for expensive operations that only need specific property values.
 - **Memory**: Long-lived applications should be mindful of observer cleanup
+- **Batched Updates**: DOM updates are batched via microtask queue for performance. Computed properties update in the same batch as their dependencies.
+
+**Note on Testing:** When writing tests with computed properties, you may need to flush the microtask queue twice:
+
+```typescript
+// In tests
+viewModel.count = 10;
+await flushMicrotasks(); // Flush property update
+await flushMicrotasks(); // Flush computed property updates
+```
 
 ### Planned Improvements
 
@@ -669,6 +850,7 @@ These limitations are known and being addressed in future versions:
 - **Deep reactivity for nested objects** - Automatic detection of nested property changes
 - **Array mutation tracking** - Direct support for push, pop, splice operations  
 - **Performance optimizations** - Enhanced handling for large datasets and complex object graphs
+- **Fine-grained dependency tracking** - Optimize computed properties to only recalculate when actual dependencies change
 
 For current workarounds and best practices, see the [examples](#examples) section above.
 

@@ -1,4 +1,4 @@
-import { html, useViewModel } from "../../../src";
+import { html, useViewModel, when } from "../../../src";
 import { cartStyles } from "../styles";
 import { CartItem } from "./CartItem";
 import { CartIcon } from "./Icons";
@@ -19,14 +19,21 @@ export const Cart = (items: productsType) => {
     items,
     isOpen: false,
     total: deriveCartTotal(cart.getAll()),
+    recentlyAdded: [] as string[],
   });
 
   // Destructure keys for ease of use
-  const { $isOpen, $items, $total } = state;
+  const { $isOpen, $items, $total, $recentlyAdded } = state;
 
   // Compute callbacks
-  const openState = $isOpen.compute((isOpen) => (isOpen ? "open" : "closed"));
-  const computedCartItems = $items.compute((items) => items.map(CartItem));
+  const openState = $isOpen.compute(isOpen => (isOpen ? "open" : "closed"));
+  const computedCartItems = $items.compute(items => items.map(CartItem));
+  const hasRecentlyAdded = $recentlyAdded.compute(
+    (items: string[]) => items.length > 0
+  );
+  const lastAdded = $recentlyAdded.compute(
+    (items: string[]) => items[items.length - 1] ?? ""
+  );
 
   // Construct the view
   const element = html`
@@ -34,7 +41,9 @@ export const Cart = (items: productsType) => {
       <div class="cart__contentContainer">
         <div class="cart__controlContainer">
           <button
-            ref="cartBtn"
+            onclick=${() => {
+              state.isOpen = !state.isOpen;
+            }}
             class="cart__control cart__control--${openState}"
           >
             ${CartIcon()}
@@ -43,6 +52,12 @@ export const Cart = (items: productsType) => {
         <ul class="cart__items">
           ${computedCartItems}
         </ul>
+        ${when(
+          hasRecentlyAdded,
+          () => html`
+            <p class="cart__recentlyAdded">Last added: ${lastAdded}</p>
+          `
+        )}
         <div class="cart__total">
           Total: <span class="cart__sum">$${$total}</span>
         </div>
@@ -50,16 +65,15 @@ export const Cart = (items: productsType) => {
     </div>
   `;
 
-  // Collect any refs
-  const { cartBtn } = element.collect();
+  // Subscribe to cart changes; push new item names rather than replacing the full array
+  cart.subscribe(newItems => {
+    const prevIds = new Set((state.items as typeof newItems).map(i => i.id));
+    const added = newItems.filter(
+      item => !prevIds.has(item.id) && item.quantity > 0
+    );
+    // Array mutation demo: push each newly-added item name onto the reactive array
+    added.forEach(item => state.recentlyAdded.push(item.name));
 
-  // Handle cart open/close
-  cartBtn.addEventListener("click", () => {
-    state.isOpen = !state.isOpen;
-  });
-
-  // Subscribe to any cart changes – this implementation has nothing to do with the ViewView library
-  cart.subscribe((newItems) => {
     state.items = newItems;
     state.total = deriveCartTotal(newItems);
   });

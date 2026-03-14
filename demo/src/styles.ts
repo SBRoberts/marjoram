@@ -41,7 +41,9 @@ export const footerStyles = css`
     border-radius: 10px;
     outline: none;
     padding: 0.5em 0.75em;
-    transition: color 0.2s ease-out, background 0.2s ease-out,
+    transition:
+      color 0.2s ease-out,
+      background 0.2s ease-out,
       transform 0.2s ease-out;
     &:hover,
     &:focus,
@@ -204,7 +206,9 @@ export const cartStyles = css`
       outline: none;
       padding: 15px;
       filter: none;
-      transition: transform 0.3s ease-out, filter 0.3s ease-out;
+      transition:
+        transform 0.3s ease-out,
+        filter 0.3s ease-out;
       transform: translateX(0);
       &:hover,
       &:focus {
@@ -235,6 +239,10 @@ export const cartStyles = css`
       height: calc(100% - 75px);
       position: relative;
       overflow-y: scroll;
+    }
+
+    &__recentlyAdded {
+      padding: 0 15px;
     }
 
     &__total {
@@ -317,11 +325,15 @@ export const cartItemStyles = css`
       color: ${background};
       min-width: 30px;
       padding: 3px 5px;
-      transition: background 0.25s ease-in, color 0.25s ease-in;
+      transition:
+        background 0.25s ease-in,
+        color 0.25s ease-in;
       &:hover {
         background: ${background};
         color: ${highlight};
-        transition: background 0.2s ease-out, color 0.2s ease-out;
+        transition:
+          background 0.2s ease-out,
+          color 0.2s ease-out;
       }
     }
   }
