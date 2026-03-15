@@ -1,8 +1,21 @@
 const CART = "cart";
 
-export type callbackType = (items: typeof products) => void;
-export type productsType = typeof products;
-export type productType = (typeof products)[0];
+export interface ProductType {
+  id: number;
+  name: string;
+  price: number;
+  description: string;
+  likes: number;
+  quantity: number;
+  image: string;
+  featured?: boolean;
+  clearance?: boolean;
+  soldOut?: boolean;
+}
+
+export type callbackType = (items: ProductType[]) => void;
+export type productsType = ProductType[];
+export type productType = ProductType;
 
 const getCart = (): productsType => JSON.parse(localStorage.getItem(CART));
 
@@ -66,7 +79,7 @@ export const cart = {
 
 cart.getAll();
 
-export const products = [
+export const products: ProductType[] = [
   {
     id: 201,
     name: "Nulla",
@@ -74,6 +87,7 @@ export const products = [
     description: "Culpa sed tenetur incidunt quia veniam sed molliti",
     likes: 78,
     quantity: 0,
+    featured: true,
     image:
       "https://images.unsplash.com/photo-1577234286642-fc512a5f8f11?ixid=MXwxMjA3fDB8MHxzZWFyY2h8MXx8ZnJ1aXR8ZW58MHx8MHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=60",
   },
@@ -104,6 +118,7 @@ export const products = [
     description: "Occaecati dolore assumenda facilis error quaerat. ",
     likes: 78,
     quantity: 0,
+    clearance: true,
     image:
       "https://images.unsplash.com/photo-1528825871115-3581a5387919?ixid=MXwxMjA3fDB8MHxzZWFyY2h8OHx8ZnJ1aXR8ZW58MHx8MHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=60",
   },
@@ -114,6 +129,7 @@ export const products = [
     description: "Autem blanditiis similique saepe excepturi at erro",
     likes: 44,
     quantity: 0,
+    soldOut: true,
     image:
       "https://images.unsplash.com/photo-1552089123-2d26226fc2b7?ixid=MXwxMjA3fDB8MHxzZWFyY2h8OXx8ZnJ1aXR8ZW58MHx8MHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=60",
   },
@@ -124,6 +140,7 @@ export const products = [
     description: "Quos accusamus distinctio voluptates ducimus neque",
     likes: 34,
     quantity: 0,
+    clearance: true,
     image:
       "https://images.unsplash.com/photo-1550258987-190a2d41a8ba?ixid=MXwxMjA3fDB8MHxzZWFyY2h8MTV8fGZydWl0fGVufDB8fDB8&ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=60",
   },
@@ -134,6 +151,7 @@ export const products = [
     description: "Error voluptate recusandae reiciendis adipisci nec",
     likes: 188,
     quantity: 0,
+    featured: true,
     image:
       "https://images.unsplash.com/photo-1582979512210-99b6a53386f9?ixid=MXwxMjA3fDB8MHxzZWFyY2h8MTl8fGZydWl0fGVufDB8fDB8&ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=60",
   },
@@ -144,6 +162,7 @@ export const products = [
     description: "Tempora sed explicabo quae recusandae vitae debiti",
     likes: 63,
     quantity: 0,
+    soldOut: true,
     image:
       "https://images.unsplash.com/photo-1601004890684-d8cbf643f5f2?ixid=MXwxMjA3fDB8MHxzZWFyY2h8MjR8fGZydWl0fGVufDB8fDB8&ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=60",
   },
@@ -184,6 +203,7 @@ export const products = [
     description: "Nihil magni libero sapiente voluptate. Perspiciati",
     likes: 11,
     quantity: 0,
+    soldOut: true,
     image:
       "https://images.unsplash.com/photo-1587324438673-56c78a866b15?ixid=MXwxMjA3fDB8MHxzZWFyY2h8Mnx8bGVtb258ZW58MHx8MHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=60",
   },

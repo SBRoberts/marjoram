@@ -1,121 +1,178 @@
 import { css } from "@emotion/css";
 
-const highlight = "#496b54";
-const background = "#aabfb2";
-const footerHeight = "100px";
-export const theme = { highlight, background };
+// Mondrian palette
+const black = "#111111";
+const white = "#FAFAF8";
+const red = "#D62626";
+const blue = "#1A3FAA";
+const yellow = "#F7C518";
+const pageBackground = "#F0EBE0";
+
+export const theme = {
+  highlight: black,
+  background: pageBackground,
+  red,
+  blue,
+  yellow,
+  white,
+};
 
 export const layoutStyles = css`
   * {
-    color: ${highlight};
+    color: ${black};
   }
   .layout,
   &.layout {
     margin-bottom: 50px;
     &__headingContainer {
-      min-width: 66%;
-      max-width: 100%;
-      width: 100vmin;
-      margin-bottom: 25px;
+      align-items: stretch;
+      border: 3px solid ${black};
+      display: flex;
+      margin-bottom: 40px;
+      max-width: 640px;
+    }
+    &__headingAccent {
+      background: ${blue};
+      border-right: 3px solid ${black};
+      flex-shrink: 0;
+      width: 20px;
+    }
+    &__headingContent {
+      padding: 24px 28px;
     }
   }
   h1 {
-    margin-top: 0;
-    display: inline-block;
     font-size: 2.5rem;
+    font-weight: 900;
+    letter-spacing: -2px;
+    line-height: 1;
+    margin: 0 0 12px;
+    text-transform: lowercase;
+  }
+  p {
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    line-height: 1.6;
+    margin: 0;
+    max-width: 52ch;
+    opacity: 0.8;
   }
 `;
 
 export const footerStyles = css`
   align-items: center;
+  background: ${pageBackground};
+  border-top: 3px solid ${black};
   display: flex;
-  /* justify-content: space-between; */
-  height: ${footerHeight};
+  gap: 16px;
+  height: 80px;
+  padding: 0 8px;
   width: 100%;
-  > button {
-    font-size: 30px;
-  }
   button {
-    background: transparent;
-    border: 1px solid ${highlight};
-    border-radius: 10px;
+    background: ${white};
+    border: 3px solid ${black};
+    border-radius: 0;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 900;
     outline: none;
-    padding: 0.5em 0.75em;
+    padding: 0.4em 0.7em;
+    box-shadow: 4px 4px 0 ${black};
     transition:
-      color 0.2s ease-out,
-      background 0.2s ease-out,
-      transform 0.2s ease-out;
+      box-shadow 0.08s ease-out,
+      transform 0.08s ease-out;
     &:hover,
-    &:focus,
-    &:active {
-      background: ${highlight};
-      color: ${background};
+    &:focus {
+      box-shadow: 2px 2px 0 ${black};
+      transform: translate(2px, 2px);
     }
     &:active {
-      transform: scale(1.1);
-    }
-    &:not(:last-of-type) {
-      margin-right: 25px;
+      box-shadow: 0 0 0 ${black};
+      transform: translate(4px, 4px);
     }
   }
 `;
 
 export const productStyles = css`
   &.product {
-    align-items: center;
-    box-shadow: 0 10px 30px 0px ${highlight + "66"};
-    border-radius: 20px;
+    align-items: stretch;
+    background: ${white};
+    border: 3px solid ${black};
+    box-shadow: 6px 6px 0 ${black};
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 20px;
+    overflow: hidden;
+    padding: 0;
     width: 100%;
-
     * {
-      color: ${highlight};
+      color: ${black};
       font-size: 20px;
-      text-align: center;
+      text-align: left;
     }
     > *:not(:last-child) {
-      margin-bottom: 10px;
+      margin-bottom: 0;
     }
   }
   .product {
     &__imageContainer {
-      height: 40vmin;
+      background: linear-gradient(
+        to bottom,
+        var(--card-accent, ${black}) 0%,
+        ${pageBackground} 100%
+      );
+      border-bottom: 3px solid ${black};
+      height: 32vmin;
       width: 100%;
     }
 
     &__image {
-      border-radius: 10px;
-      box-shadow: 0 20px 16px -10px ${highlight + "99"};
-      height: 100%;
-      object-fit: cover;
-      width: 100%;
+      display: none;
     }
 
     &__headingContainer {
+      flex: 1;
       min-height: 13vmin;
+      padding: 16px 26px; /* φ-progression: 10→16→26 */
+      border-bottom: 3px solid ${black};
     }
 
-    &__likesContainer,
+    &__metaRow {
+      border-bottom: 3px solid ${black};
+      display: flex;
+      width: 100%;
+    }
+
+    &__likesContainer {
+      flex: 1.618; /* golden majority — action zone */
+    }
+
     &__cartContainer {
       width: 100%;
     }
 
     &__likeBtn {
       align-items: center;
-      background: none;
-      border: 1px solid ${highlight};
-      border-radius: 5px;
+      background: ${white};
+      border: none;
       cursor: pointer;
       display: flex;
       font-size: 1em;
+      font-weight: 700;
+      height: 100%;
       justify-content: center;
       outline: none;
-      padding: 20px;
+      padding: 16px 10px; /* 16:10 ≈ φ vertical:horizontal */
       width: 100%;
-      min-height: 8vh;
+      transition:
+        background 0.08s,
+        color 0.08s;
+      &:hover {
+        background: ${red};
+        color: ${white};
+      }
     }
 
     &__thumbsUp {
@@ -123,184 +180,307 @@ export const productStyles = css`
       cursor: pointer;
       margin-right: 10px;
       svg {
-        fill: ${highlight};
-        max-width: 50px;
-        min-width: 25px;
+        fill: currentColor;
+        max-width: 26px;
+        min-width: 16px; /* 16:26 ≈ 1:φ */
       }
     }
 
     &__name {
-      font-size: 1.5em;
-      margin-bottom: 10px;
+      font-size: 1.375em; /* 0.85 × φ ≈ 1.375 */
+      font-weight: 900;
+      margin: 0 0 10px;
+      letter-spacing: -0.5px;
     }
 
     &__description {
-      font-size: 1em;
+      font-size: 0.85em;
+      font-weight: 400;
+      margin: 0;
+      opacity: 0.75;
     }
 
     &__priceContainer {
-      padding: 5px;
-      width: 100%;
+      flex: 1; /* minor portion: ~38.2% */
+      background: ${black};
+      border-right: 3px solid ${black};
+      display: flex;
+      align-items: center;
+      padding: 10px 16px; /* 10:16 ≈ 1:φ */
     }
     &__price {
-      color: ${highlight};
+      color: ${yellow} !important;
       font-size: 1.25em;
-      font-weight: 700;
-      text-decoration: underline;
+      font-weight: 900;
+      text-decoration: none;
       width: 100%;
       margin: 0;
+    }
+
+    &__cartContainer {
+      button {
+        background: ${blue};
+        border: none;
+        border-top: 3px solid ${black};
+        color: ${white} !important;
+        cursor: pointer;
+        font-size: 1em;
+        font-weight: 700;
+        padding: 14px 20px;
+        text-align: left;
+        transition: background 0.08s;
+        width: 100%;
+        &:hover {
+          background: ${black};
+        }
+      }
+    }
+
+    /* Status modifiers */
+    &--sold-out {
+      .product__image {
+        filter: grayscale(100%);
+        opacity: 0.6;
+      }
+      .product__likeBtn--disabled {
+        background: #ccc;
+        color: #666 !important;
+        cursor: not-allowed;
+        font-style: italic;
+        letter-spacing: 1px;
+      }
+      .product__cartContainer button {
+        background: #999;
+        cursor: not-allowed;
+        &:hover {
+          background: #999;
+        }
+      }
+    }
+
+    &--clearance {
+      .product__price {
+        text-decoration: line-through;
+        opacity: 0.7;
+      }
+      .product__priceContainer::after {
+        content: "SALE";
+        color: ${yellow};
+        font-size: 0.65em;
+        font-weight: 900;
+        letter-spacing: 2px;
+        margin-left: 8px;
+      }
+    }
+
+    &--featured {
+      .product__headingContainer::before {
+        content: "FEATURED";
+        display: block;
+        font-size: 0.65em;
+        font-weight: 900;
+        letter-spacing: 3px;
+        color: ${red};
+        margin-bottom: 6px;
+      }
     }
   }
 `;
 
 export const productGridStyles = css`
-  margin: 0 auto;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-  grid-gap: 100px 50px;
+  grid-template-columns: repeat(6, 1fr);
+  grid-auto-flow: row dense;
+  gap: 30px;
+  margin: 0 auto;
   width: 100%;
-`;
 
-export const cartStyles = css`
-  &.cart,
-  .cart {
-    backdrop-filter: blur(15px);
-    border: 2px solid ${highlight};
-    border-radius: 20px 0 0 20px;
-    height: 100vh;
-    position: fixed;
-    max-width: 100vw;
-    min-width: 300px;
-    right: 0;
-    top: 0;
-    transition: transform 0.3s ease-out;
+  /* Default: 2-col span (3 per row) — accent cycles through primary palette */
+  & > .product {
+    grid-column: span 2;
+  }
+  & > .product:nth-child(4n + 1) {
+    --card-accent: ${blue};
+  }
+  & > .product:nth-child(4n + 2) {
+    --card-accent: ${red};
+  }
+  & > .product:nth-child(4n + 3) {
+    --card-accent: ${yellow};
+  }
+  & > .product:nth-child(4n + 4) {
+    --card-accent: ${black};
+  }
 
-    &--open {
-      transform: translateX(0);
+  /* Featured: wide, red — high demand */
+  & > .product--featured {
+    grid-column: span 4;
+    --card-accent: ${red};
+  }
+
+  /* Clearance: wide, yellow — urgency */
+  & > .product--clearance {
+    grid-column: span 4;
+    --card-accent: ${yellow};
+  }
+
+  /* Sold-out: narrow, demoted */
+  & > .product--sold-out {
+    grid-column: span 2;
+    --card-accent: ${black};
+  }
+
+  @media (max-width: 900px) {
+    grid-template-columns: repeat(2, 1fr);
+    & > .product,
+    & > .product--featured,
+    & > .product--clearance,
+    & > .product--sold-out {
+      grid-column: span 1;
     }
+  }
 
-    &--closed {
-      transform: translateX(100%);
-    }
-
-    &__contentContainer {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      position: relative;
-    }
-
-    &__controlContainer {
-      box-shadow: 0 0 20px 0px ${highlight};
-      border-radius: 17px 0 0 0;
-      background: ${highlight + "cc"};
-      backdrop-filter: blur(10px);
-      /* opacity: 0.75; */
-      text-align: left;
-      width: 100%;
-    }
-
-    &__control {
-      background: none;
-      border: none;
-      outline: none;
-      padding: 15px;
-      filter: none;
-      transition:
-        transform 0.3s ease-out,
-        filter 0.3s ease-out;
-      transform: translateX(0);
-      &:hover,
-      &:focus {
-        cursor: pointer;
-        transform: translateX(-100) scale(1.15);
-      }
-      &--closed {
-        transform: translateX(-100%);
-        &:hover {
-          transform: translateX(-100%) scale(1.15);
-        }
-        svg {
-          fill: ${highlight};
-        }
-      }
-      &--open svg {
-        fill: ${background};
-      }
-    }
-
-    svg {
-      /* fill: ${background}; */
-      transition: fill 0.3s ease-out;
-      width: 50px;
-    }
-
-    &__items {
-      height: calc(100% - 75px);
-      position: relative;
-      overflow-y: scroll;
-    }
-
-    &__recentlyAdded {
-      padding: 0 15px;
-    }
-
-    &__total {
-      color: ${highlight};
-      display: block;
-      font-size: 20px;
-      font-weight: 400;
-      margin-top: 15px;
-      padding: 15px;
-      position: relative;
-      &:before {
-        background: ${highlight};
-        content: "";
-        position: absolute;
-        left: 0;
-        height: 2px;
-        top: 0;
-        width: 75%;
-      }
-    }
-
-    &__sum {
-      font-weight: 700;
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+    & > .product,
+    & > .product--featured,
+    & > .product--clearance,
+    & > .product--sold-out {
+      grid-column: span 1;
     }
   }
 `;
 
+export const cartStyles = css`
+  &.cart {
+    background: ${white};
+    border-left: 3px solid ${black};
+    height: 100vh;
+    max-width: 100vw;
+    min-width: 320px;
+    position: fixed;
+    right: 0;
+    top: 0;
+    transition: transform 0.2s ease-out;
+
+    &--open {
+      transform: translateX(0);
+    }
+    &--closed {
+      transform: translateX(100%);
+    }
+  }
+
+  .cart__contentContainer {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  /* overflow: visible lets the button peek left outside the panel edge */
+  .cart__controlContainer {
+    background: ${black};
+    overflow: visible;
+    width: 100%;
+  }
+
+  .cart__control {
+    background: ${black};
+    border: none;
+    cursor: pointer;
+    display: block;
+    outline: none;
+    padding: 12px 15px;
+    transition:
+      transform 0.2s ease-out,
+      background 0.1s ease-out;
+    /* fit-content ensures -100% = the button's own width, not the container's */
+    width: fit-content;
+    svg {
+      display: block;
+      fill: ${white};
+      width: 44px;
+    }
+    &:hover,
+    &:focus {
+      background: ${red};
+    }
+  }
+
+  /* Slide the button left by its own width so it peeks out from the panel edge */
+  .cart__control--closed {
+    transform: translateX(-100%);
+  }
+  .cart__control--open {
+    transform: translateX(0);
+  }
+
+  .cart__items {
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .cart__recentlyAdded {
+    background: ${yellow};
+    border-top: 3px solid ${black};
+    font-size: 0.8em;
+    font-weight: 700;
+    margin: 0;
+    padding: 8px 15px;
+  }
+
+  .cart__total {
+    background: ${red};
+    border-top: 3px solid ${black};
+    color: ${white} !important;
+    display: block;
+    font-size: 18px;
+    font-weight: 900;
+    padding: 15px;
+  }
+
+  .cart__sum {
+    color: ${white} !important;
+    font-weight: 900;
+  }
+`;
 export const cartItemStyles = css`
   &.item,
   .item {
+    border-bottom: 3px solid ${black};
     display: flex;
-    font-size: 18px;
+    font-size: 16px;
     list-style: none;
-    margin: 15px;
+    margin: 0;
+    padding: 14px 15px;
     &__details {
       flex-grow: 1;
     }
     &__imageContainer {
+      border: 3px solid ${black};
       display: inline-block;
+      flex-shrink: 0;
       height: 15vmin;
-      margin-right: 15px;
+      margin-right: 12px;
+      max-height: 100px;
+      max-width: 100px;
       width: 15vmin;
     }
 
     &__image {
-      /* border: 1px solid ${highlight}; */
-      box-shadow: 0 20px 16px -10px ${highlight + "99"};
-      border-radius: 10px;
+      display: block;
       height: 100%;
       object-fit: cover;
       width: 100%;
     }
 
     &__nameContainer {
+      font-weight: 700;
       width: 100%;
     }
 
     &__priceContainer {
+      font-size: 0.9em;
       width: 100%;
     }
 
@@ -313,27 +493,23 @@ export const cartItemStyles = css`
     }
 
     &__quantity {
-      background: ${background};
+      background: transparent;
       border: none;
-      color: ${highlight};
-      font-weight: 700;
-      font-size: 18px;
+      color: ${black};
+      font-size: 16px;
+      font-weight: 900;
     }
     &__btn {
-      background: ${highlight};
-      border-radius: 5px;
-      color: ${background};
-      min-width: 30px;
-      padding: 3px 5px;
-      transition:
-        background 0.25s ease-in,
-        color 0.25s ease-in;
+      background: ${black};
+      border: none;
+      color: ${white};
+      cursor: pointer;
+      font-weight: 700;
+      min-width: 28px;
+      padding: 4px 8px;
+      transition: background 0.08s;
       &:hover {
-        background: ${background};
-        color: ${highlight};
-        transition:
-          background 0.2s ease-out,
-          color 0.2s ease-out;
+        background: ${red};
       }
     }
   }
@@ -345,77 +521,98 @@ export const formStyles = css`
     flex-direction: column;
     position: relative;
     &__disclaimer {
-      font-weight: 400;
       font-size: 0.75em;
+      font-weight: 400;
       margin: 2em 0 0;
       text-align: right;
     }
     &__label {
       align-items: center;
       display: flex;
-      font-style: italic;
-      font-size: 1.5rem;
+      font-size: 1.1rem;
+      font-weight: 900;
       flex-shrink: 0;
+      letter-spacing: 1px;
       margin-top: 0;
       padding-right: 50px;
       position: relative;
-      white-space: space nowrap;
+      text-transform: uppercase;
+      white-space: nowrap;
       &:after {
-        background: ${highlight};
-        border-radius: 1px;
+        background: ${black};
         content: "";
         flex-grow: 1;
-        height: 2px;
-        width: auto;
+        height: 3px;
+        margin-left: 16px;
         position: relative;
-        margin-left: 25px;
+        width: auto;
       }
     }
   }
   .formInput {
     align-items: center;
-    color: ${highlight};
+    color: ${black};
     display: flex;
     margin-bottom: 10px;
     padding: 10px 0;
-    &__labelText {
-    }
     &__input {
-      background: transparent;
-      outline: none;
-      border: none;
-      border-radius: 5px 0px;
-      border-bottom: 1px solid ${highlight};
+      background: ${white};
+      border: 3px solid ${black};
       flex-grow: 1;
-      padding: 5px 0;
+      font-size: 1rem;
+      font-weight: 500;
       margin-left: 10px;
-      transform: filter 0.2s ease-out;
+      outline: none;
+      padding: 8px 12px;
       &::placeholder {
-        color: ${highlight + "aa"};
+        color: #888;
       }
-      &:not(:placeholder-shown) {
-        filter: contrast(200%) brightness(1);
+      &:focus {
+        outline: 3px solid ${blue};
+        outline-offset: 1px;
       }
     }
   }
   button[type="submit"] {
-    margin-top: 25px;
     align-self: flex-end;
+    background: ${black};
+    border: 3px solid ${black};
+    box-shadow: 4px 4px 0 ${red};
+    color: ${white};
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 900;
+    letter-spacing: 1px;
+    margin-top: 25px;
     min-width: 33%;
+    padding: 12px 24px;
+    text-transform: uppercase;
+    transition:
+      box-shadow 0.08s ease-out,
+      transform 0.08s ease-out;
+    &:hover {
+      box-shadow: 2px 2px 0 ${red};
+      transform: translate(2px, 2px);
+    }
+    &:active {
+      box-shadow: 0 0 0 ${red};
+      transform: translate(4px, 4px);
+    }
   }
 `;
 
 export const modalStyles = css`
   &.modal,
   .modal {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    justify-content: center;
     align-items: center;
+    background: rgba(17, 17, 17, 0.8);
+    display: flex;
     flex-direction: column;
-    backdrop-filter: blur(10px);
-    transition: opacity 0.2s ease-out;
+    inset: 0;
+    justify-content: center;
+    position: fixed;
+    transition: opacity 0.12s ease-out;
     &__open {
       &--true {
         opacity: 1;
@@ -426,22 +623,36 @@ export const modalStyles = css`
       }
     }
     &__content {
-      background: ${background};
-      border: 1px solid ${highlight};
-      border-radius: 20px;
-      box-shadow: 0 10px 30px 0px ${highlight + "66"};
+      background: ${white};
+      border: 3px solid ${black};
+      border-top: 8px solid ${blue};
+      box-shadow: 8px 8px 0 ${black};
       max-width: 750px;
       padding: 40px;
       position: relative;
       width: 50vw;
     }
     &__close {
+      align-items: center;
+      background: ${black};
+      border: 3px solid ${black} !important;
+      border-radius: 0 !important;
+      color: ${white};
+      cursor: pointer;
+      display: flex;
+      font-size: 1.25rem;
+      font-weight: 900;
+      height: 36px;
+      justify-content: center;
+      padding: 0 !important;
       position: absolute;
-      top: 20px;
-      right: 20px;
-      text-align: center;
-      border: none;
-      border-radius: 50% !important;
+      right: 16px;
+      top: 16px;
+      transition: background 0.08s;
+      width: 36px;
+      &:hover {
+        background: ${red};
+      }
     }
   }
 `;

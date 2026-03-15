@@ -3,35 +3,54 @@ import globalStyles from "./globalStyles";
 
 // Components
 import { ProductGrid } from "./components/ProductGrid";
-import { Cart } from "./components/Cart";
+import { CartWidget } from "./components/Cart";
+import { ChatLauncher } from "./components/ChatLauncher";
+import { CookieBanner } from "./components/CookieBanner";
+import { NotificationBell } from "./components/NotificationBell";
+import { ContactWidget } from "./components/Modal";
+import { JumpWidget } from "./components/JumpLink";
+import { Layout } from "./components/Layout";
 
 // Mock Data
 import { cart, products } from "./data";
-import { View, html, useViewModel } from "../../src";
-import { Layout } from "./components/Layout";
-
-/**
- * Initialize the demo application
- */
-const init = (): void => {
-  // Find the app's root element
-  const appRoot = document.getElementById("root");
-
-  if (!appRoot) {
-    throw new Error("Could not find element with id 'root'");
-  }
-
-  // Construct views
-  const CartElement = Cart(cart.items);
-  const ProductGridElement = ProductGrid(products);
-  const Page = Layout(CartElement, ProductGridElement);
-
-  // Append views to DOM
-  appRoot.append(Page);
-};
+import { createWidget } from "../../src";
 
 // Initialize app when DOM is ready
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", () => {
+  // Standalone widgets — each mounts into its own root,
+  // independent of the page layout, managing its own lifecycle.
+  const cartWidget = CartWidget(cart.items);
+  const chatWidget = ChatLauncher();
+  const cookieWidget = CookieBanner();
+  const bellWidget = NotificationBell();
+  const contactWidget = ContactWidget();
+  const jumpWidget = JumpWidget();
+
+  // Main page widget wraps the product grid and layout chrome.
+  const appWidget = createWidget({
+    target: "#root",
+    model: {},
+    render: () => Layout(ProductGrid(products)),
+    onMount: () => {
+      cartWidget.mount();
+      chatWidget.mount();
+      cookieWidget.mount();
+      bellWidget.mount();
+      contactWidget.mount();
+      jumpWidget.mount();
+    },
+    onDestroy: () => {
+      cartWidget.destroy();
+      chatWidget.destroy();
+      cookieWidget.destroy();
+      bellWidget.destroy();
+      contactWidget.destroy();
+      jumpWidget.destroy();
+    },
+  });
+
+  appWidget.mount();
+});
 
 // Apply global styles
 globalStyles;

@@ -1,7 +1,7 @@
 {
   "name": "marjoram",
-  "version": "0.1.0",
-  "description": "A lightweight JavaScript library to create and manipulate DOM elements and to manage their state",
+  "version": "1.0.0",
+  "description": "Widget SDK toolkit — reactive state, template binding, and DOM isolation in under 5KB with zero dependencies",
   "keywords": [
     "dom",
     "reactive",
@@ -9,7 +9,13 @@
     "state-management",
     "typescript",
     "zero-dependencies",
-    "xss-safe"
+    "xss-safe",
+    "widget",
+    "embed",
+    "embeddable",
+    "sdk",
+    "shadow-dom",
+    "no-build"
   ],
   "homepage": "https://github.com/SBRoberts/marjoram#readme",
   "bugs": {
