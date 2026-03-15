@@ -184,20 +184,20 @@ export class SchemaProp {
   }
 
   private nodeObserver(node: Node | Attr) {
-    let oldValue = this.#signal.peek();
+    let oldValue = this.#signal.peek() as SchemaPropValue;
     const parent = node.parentElement;
-    return (newValue: typeof oldValue): void => {
+    return (newValue: SchemaPropValue): void => {
       if (node instanceof Attr) {
         node.value = node.value.replace(
-          oldValue.toString(),
-          newValue.toString()
+          String(oldValue),
+          String(newValue)
         );
       } else if (Array.isArray(newValue)) {
-        parent?.replaceChildren(...newValue);
+        parent?.replaceChildren(...(newValue as (string | Node)[]));
       } else {
         node.textContent =
-          node.textContent?.replace(oldValue.toString(), newValue.toString()) ||
-          newValue.toString();
+          node.textContent?.replace(String(oldValue), String(newValue)) ||
+          String(newValue);
       }
 
       // Update oldValue AFTER the update for next time
