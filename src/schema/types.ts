@@ -55,9 +55,13 @@ interface SchemaMethods {
   getPropertyById: (id: string) => SchemaProp | undefined;
   hasProperty: (key: string) => boolean;
   hasId: (id: string) => boolean;
+  /** Disposes all schema props and clears the schema. Call when the owning view or widget is destroyed. */
+  dispose: () => void;
 }
 
 export interface Schema extends SchemaMethods {
   ids: string[];
   props: SchemaProp[];
+  keyMap: Map<string, SchemaProp>;
+  idMap: Map<string, SchemaProp>;
 }

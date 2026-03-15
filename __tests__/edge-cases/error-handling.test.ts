@@ -194,10 +194,11 @@ describe("Error Handling & Edge Cases", () => {
   });
 
   describe("Function Properties", () => {
-    test("should handle function properties in viewModel", () => {
+    test("should handle function properties in viewModel as computed properties", () => {
       const viewModel = useViewModel({
         name: "test",
-        getName: () => "function result",
+        // Functions are now treated as computed properties
+        displayName: (vm: any) => `Name: ${vm.name}`,
       });
 
       expect(() => {
@@ -207,8 +208,9 @@ describe("Error Handling & Edge Cases", () => {
         document.body.append(view);
       }).not.toThrow();
 
-      expect(typeof viewModel.getName).toBe("function");
-      expect(viewModel.getName()).toBe("function result");
+      // Computed properties return their computed value (not a function)
+      expect(typeof viewModel.displayName).toBe("string");
+      expect(viewModel.displayName).toBe("Name: test");
     });
   });
 });

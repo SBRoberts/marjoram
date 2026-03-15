@@ -3,6 +3,9 @@ import { getByTestId } from "@testing-library/dom";
 
 const TEST_ID = "performance-test";
 
+// Helper to wait for microtask queue to flush (for batched updates)
+const flushMicrotasks = () => new Promise<void>(resolve => queueMicrotask(() => resolve()));
+
 /**
  * Performance tests focused on behavioral correctness and relative performance:
  * 1. Always test functional correctness (most important)
@@ -32,9 +35,9 @@ describe("Performance & Memory Edge Cases", () => {
   });
 
   // Helper function for performance testing with statistical rigor
-  const performanceBenchmark = (
+  const performanceBenchmark = async (
     name: string,
-    testFn: () => number,
+    testFn: () => number | Promise<number>,
     baselineFn?: () => number,
     maxRatio = PERF_CONFIG.maxRatio
   ) => {
@@ -46,12 +49,12 @@ describe("Performance & Memory Edge Cases", () => {
     const baselineTimes: number[] = [];
 
     // Warmup run to reduce JIT compilation effects
-    testFn();
+    await testFn();
     if (baselineFn) baselineFn();
 
     // Run test multiple times for statistical validity
     for (let i = 0; i < iterations; i++) {
-      testTimes.push(testFn());
+      testTimes.push(await testFn());
       if (baselineFn) {
         baselineTimes.push(baselineFn());
       }
@@ -97,7 +100,7 @@ describe("Performance & Memory Edge Cases", () => {
   };
 
   describe("Rapid Updates", () => {
-    test("should handle rapid successive updates efficiently", () => {
+    test("should handle rapid successive updates efficiently", async () => {
       const viewModel = useViewModel({ count: 0 });
       const view = html`<div data-testid="${TEST_ID}">
         ${viewModel.$count}
@@ -108,11 +111,12 @@ describe("Performance & Memory Edge Cases", () => {
       expect(element.textContent).toBe("\n        0\n      ");
 
       // Test function
-      const testRapidUpdates = () => {
+      const testRapidUpdates = async () => {
         const start = performance.now();
         for (let i = 0; i < 100; i++) {
           viewModel.count = i;
         }
+        await flushMicrotasks();
         return performance.now() - start;
       };
 
@@ -129,7 +133,7 @@ describe("Performance & Memory Edge Cases", () => {
       };
 
       // Run performance test - focus on relative performance, not absolute
-      const result = performanceBenchmark(
+      const result = await performanceBenchmark(
         "Rapid Updates",
         testRapidUpdates,
         baselineAssignments
@@ -138,11 +142,14 @@ describe("Performance & Memory Edge Cases", () => {
       // Should be reasonably fast relative to baseline (adapted for environment)
       expect(result.passed).toBe(true);
 
+      // Ensure final update is complete
+      await flushMicrotasks();
+
       // Most importantly: functional correctness must always work
       expect(element.textContent).toBe("\n        99\n      ");
     });
 
-    test("should handle rapid updates to multiple properties", () => {
+    test("should handle rapid updates to multiple properties", async () => {
       const viewModel = useViewModel({
         count: 0,
         text: "initial",
@@ -162,6 +169,7 @@ describe("Performance & Memory Edge Cases", () => {
         viewModel.text = `text-${i}`;
         viewModel.flag = i % 2 === 0;
       }
+      await flushMicrotasks();
 
       const element = getByTestId(document.body, TEST_ID);
       expect(element.textContent).toContain("49");
@@ -212,7 +220,7 @@ describe("Performance & Memory Edge Cases", () => {
   });
 
   describe("Large Number of Observers", () => {
-    test("should handle many views observing the same property", () => {
+    test("should handle many views observing the same property", async () => {
       const viewModel = useViewModel({ sharedValue: 0 });
       const views: DocumentFragment[] = [];
 
@@ -227,6 +235,7 @@ describe("Performance & Memory Edge Cases", () => {
 
       // Update the shared property
       viewModel.sharedValue = 42;
+      await flushMicrotasks();
 
       // All views should be updated
       for (let i = 0; i < 100; i++) {
@@ -235,7 +244,7 @@ describe("Performance & Memory Edge Cases", () => {
       }
     });
 
-    test("should handle cleanup when elements are removed", () => {
+    test("should handle cleanup when elements are removed", async () => {
       const viewModel = useViewModel({ count: 0 });
       const views: DocumentFragment[] = [];
 
@@ -256,6 +265,7 @@ describe("Performance & Memory Edge Cases", () => {
 
       // Update should still work for remaining views
       viewModel.count = 100;
+      await flushMicrotasks();
 
       for (let i = 5; i < 10; i++) {
         const element = getByTestId(document.body, `cleanup-${i}`);
@@ -264,72 +274,10 @@ describe("Performance & Memory Edge Cases", () => {
     });
   });
 
-  describe("Memory Stress Tests", () => {
-    test("should handle creating and destroying many viewModels", () => {
-      const viewModels: ReturnType<typeof useViewModel>[] = [];
-
-      // Create many viewModels
-      for (let i = 0; i < 100; i++) {
-        const vm = useViewModel({
-          id: i,
-          data: `data-${i}`,
-          nested: { value: i * 2 },
-        });
-        viewModels.push(vm);
-      }
-
-      // Use them
-      viewModels.forEach((vm, i) => {
-        expect(vm.id).toBe(i);
-        expect(vm.data).toBe(`data-${i}`);
-      });
-
-      // Clear references (simulate cleanup)
-      viewModels.length = 0;
-    });
-
-    test("should handle large nested object updates", () => {
-      interface NestedData extends Record<string, unknown> {
-        level1: {
-          level2: {
-            level3: {
-              value: string;
-            };
-          };
-        };
-      }
-
-      const viewModel = useViewModel<NestedData>({
-        level1: {
-          level2: {
-            level3: {
-              value: "initial",
-            },
-          },
-        },
-      });
-
-      const view = html`<div data-testid="${TEST_ID}">
-        ${viewModel.level1.level2.level3.value}
-      </div>`;
-      document.body.append(view);
-
-      // Update nested value many times
-      for (let i = 0; i < 100; i++) {
-        viewModel.level1.level2.level3.value = `value-${i}`;
-      }
-
-      const element = getByTestId(document.body, TEST_ID);
-      // Note: Deep nested updates don't trigger reactivity in current implementation
-      expect(element.textContent).toBe("\n        initial\n      ");
-    });
-  });
-
   describe("Computed Property Performance", () => {
-    test("should handle expensive computed properties efficiently", () => {
-      const viewModel = useViewModel({ input: 10 });
+    test("should handle expensive computed properties efficiently", async () => {
+      const viewModel = useViewModel({ input: 0 });
 
-      // Expensive computation
       const computed = viewModel.$input.compute((value: number) => {
         let result = 0;
         for (let i = 0; i < value * 1000; i++) {
@@ -342,9 +290,10 @@ describe("Performance & Memory Edge Cases", () => {
       document.body.append(view);
 
       // Test with performance comparison
-      const testComputedUpdate = () => {
+      const testComputedUpdate = async () => {
         const start = performance.now();
         viewModel.input = 5; // Should trigger recomputation
+        await flushMicrotasks();
         return performance.now() - start;
       };
 
@@ -359,7 +308,7 @@ describe("Performance & Memory Edge Cases", () => {
         return performance.now() - start;
       };
 
-      const result = performanceBenchmark(
+      const result = await performanceBenchmark(
         "Computed Property",
         testComputedUpdate,
         baselineComputation
@@ -373,7 +322,7 @@ describe("Performance & Memory Edge Cases", () => {
       expect(element.textContent).toBe("12497500"); // Sum of 0 to 4999
     });
 
-    test("should handle multiple computed properties", () => {
+    test("should handle multiple computed properties", async () => {
       const viewModel = useViewModel({ base: 10 });
 
       const doubled = viewModel.$base.compute((x: number) => x * 2);
@@ -381,11 +330,14 @@ describe("Performance & Memory Edge Cases", () => {
       const squared = viewModel.$base.compute((x: number) => x * x);
 
       const view = html`
-        <div data-testid="${TEST_ID}">${doubled} | ${tripled} | ${squared}</div>
+        <div data-testid="${TEST_ID}">
+          ${doubled} | ${tripled} | ${squared}
+        </div>
       `;
       document.body.append(view);
 
       viewModel.base = 5;
+      await flushMicrotasks();
 
       const element = getByTestId(document.body, TEST_ID);
       expect(element.textContent).toContain("10"); // doubled

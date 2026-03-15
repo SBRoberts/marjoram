@@ -13,83 +13,55 @@ describe("View Model Tests", () => {
     document.body.innerHTML = "";
   });
 
-  describe("String Values", () => {
-    const text = "Hello, world!";
-    const newText = "This is new text";
-    it("should render changes in view model", () => {
-      testViewModelChange(text, newText);
+  describe("Primitive Values", () => {
+    it("should render and update string values", async () => {
+      await testViewModelChange("Hello, world!", "This is new text");
     });
-    it("should compute and render changes in view model", () => {
-      testViewModelCompute(text, newText, text => `${text} but computed`);
-    });
-  });
 
-  describe("Number Values", () => {
-    const number = 9;
-    const newNumber = 99;
-    it("should render changes in view model", () => {
-      testViewModelChange(number, newNumber);
+    it("should render and update number values", async () => {
+      await testViewModelChange(9, 99);
     });
-    it("should compute and render changes in view model", () => {
-      testViewModelCompute(number, newNumber, number => number * 3);
+
+    it("should compute string values", async () => {
+      await testViewModelCompute(
+        "Hello, world!",
+        "This is new text",
+        text => `${text} but computed`
+      );
+    });
+
+    it("should compute number values", async () => {
+      await testViewModelCompute(9, 99, number => number * 3);
     });
   });
 
   describe("Object Values", () => {
-    const two = "two";
-    const three = "three";
-
-    const inputObj = { one: { two, three } };
-
-    it("should render changes in view model", () => {
+    it("should compute nested object properties", () => {
+      const inputObj = { one: { two: "two", three: "three" } };
       const viewModel = useViewModel(inputObj);
 
-      // const handleCompute = (inputObj) => {};
       const element = html`
         <h1 ref=${TEST_ID} data-testid="${TEST_ID}">
-          <span data-testid="${two}"
+          <span data-testid="two"
             >${viewModel.$one.compute(({ two }) => two)}</span
           >
-          <span data-testid="${three}"
+          <span data-testid="three"
             >${viewModel.$one.compute(({ three }) => three)}</span
           >
         </h1>
       `;
       document.body.append(element);
 
-      const domElement = getByTestId(document.body, TEST_ID);
-
-      expect(domElement).toBeInTheDocument();
-      expect(getByTestId(document.body, two)).toBeInTheDocument();
-      expect(getByTestId(document.body, three)).toBeInTheDocument();
-      // expect(domElement).toHaveTextContent(inputObj.two);
+      expect(getByTestId(document.body, TEST_ID)).toBeInTheDocument();
+      expect(getByTestId(document.body, "two")).toHaveTextContent("two");
+      expect(getByTestId(document.body, "three")).toHaveTextContent("three");
     });
-    // it("should compute and render changes in view model", () => {
-    //   testViewModelCompute(number, newNumber, (number) => number * 3);
-    // });
   });
 
-  describe("View Model Array type arguments", () => {
-    const testListItemLengthAndDomContent = (
-      viewModel: ViewModel<{ items: any }>,
-      itemCount: number
-    ) => {
-      // Ensure all list items
-      const listItemElements = getAllByTestId(document.body, TEST_ID);
-      expect(listItemElements).toHaveLength(itemCount);
-
-      viewModel.items.forEach((item: any) => {
-        const element = getByText(document.body, item);
-        expect(element).toBeInTheDocument();
-        expect(element.textContent).toEqual(item);
-      });
-    };
-
-    it("should render changes in view model", () => {
-      const ref = "list";
-      const listItemText = [`item 1`, `item 2`, `item 3`];
-      const initialState = { items: listItemText };
-      const viewModel = useViewModel(initialState);
+  describe("Array Values", () => {
+    it("should render and update array values", async () => {
+      const listItemText = ["item 1", "item 2", "item 3"];
+      const viewModel = useViewModel({ items: listItemText });
 
       const listItemView = viewModel.$items.compute((items: string[]) =>
         items.map(
@@ -97,16 +69,24 @@ describe("View Model Tests", () => {
             html`<li data-testid="${TEST_ID}" ref="item-${i}">${item}</li>`
         )
       );
-      const listView = html` <ul ref="${ref}">
-        ${listItemView}
-      </ul>`;
+      const listView = html`<ul ref="list">${listItemView}</ul>`;
       document.body.append(listView);
 
-      listView.collect(); // Ensure collection works
-      testListItemLengthAndDomContent(viewModel, listItemText.length);
-      viewModel.items = [...viewModel.items, "item 4"];
+      // Verify initial render
+      let listItemElements = getAllByTestId(document.body, TEST_ID);
+      expect(listItemElements).toHaveLength(3);
+      listItemText.forEach(item => {
+        expect(getByText(document.body, item)).toBeInTheDocument();
+      });
 
-      testListItemLengthAndDomContent(viewModel, 4);
+      // Update array
+      viewModel.items = [...viewModel.items, "item 4"];
+      await new Promise<void>(resolve => queueMicrotask(() => resolve()));
+
+      // Verify updated render
+      listItemElements = getAllByTestId(document.body, TEST_ID);
+      expect(listItemElements).toHaveLength(4);
+      expect(getByText(document.body, "item 4")).toBeInTheDocument();
     });
   });
 });

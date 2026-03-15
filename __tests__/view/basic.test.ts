@@ -138,114 +138,50 @@ describe("Basic View Rendering", () => {
   });
 
   test("should collect all elements with a ref attribute", () => {
-    const sectionData = {
-      top: "TOP TEXT",
-      bottom: "BOTTOM TEXT",
-      title: "Title Text",
-      heading: "Heading Text",
-      number: 90210,
-      img: "https://images.unsplash.com/photo-1519638399535-1b036603ac77?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=1789&q=80",
-      imgAlt: "this is an alt tag",
-      body: "I'm baby swag semiotics scenester drinking vinegar franzen lomo. Cornhole man bun hammock mustache slow-carb. Adaptogen keffiyeh 8-bit woke salvia, leggings flannel food truck echo park blog everyday carry hell of.",
-    };
-
-    const refs = {
-      section: "section",
-      title: "title",
-      heading: "heading",
-      content: "content",
-      number: "number",
-      image: "image",
-    };
-
-    const sectionView = html`
-      <section ref="${refs.section}" data-testid="${TEST_ID}">
-        ${sectionData.top}
-        <h1 ref="${refs.title}">${sectionData.title}</h1>
-        <h2 ref="${refs.heading}">${sectionData.heading}</h2>
-        <p ref="${refs.content}">${sectionData.body}</p>
-        <div>
-          <h3 ref="${refs.number}">${sectionData.number}</h3>
-          <div>
-            <img
-              ref="${refs.image}"
-              src="${sectionData.img}"
-              alt="${sectionData.imgAlt}"
-            />
-          </div>
-        </div>
-        ${sectionData.bottom}
-      </section>
-    `;
-
-    document.body.append(sectionView);
-
-    const elementCollection = sectionView.collect();
-
-    getByTestId(document.body, TEST_ID); // Verify element exists
-
-    // Assert that all of our refs are collected and actually on the DOM
-    for (const ref in refs) {
-      const el = elementCollection[ref];
-      expect(elementCollection).toHaveProperty(ref);
-      expect(el).toBeInTheDocument();
-    }
-  });
-
-  test("should render a variety of argument types", () => {
     const generateChildEl = (index = 0, ref = "") =>
       html`<p ref="${ref}" data-testid="generatedEl">
-        This is element number ${index}
+        Element ${index}
       </p>`;
 
-    const data: Record<string, any> = {
-      string: "This is a string",
-      number: 90210,
-      array: ["Array item 1", "Array item 2", "Array item 3"],
-      object: { prop: "This is an object value" },
-      child: generateChildEl(0, "child"),
-      childArray: [
-        generateChildEl(1, "childArray-0"),
-        generateChildEl(2, "childArray-1"),
-        generateChildEl(3, "childArray-2"),
-      ],
-    };
-
     const sectionView = html`
-      <section data-testid="${TEST_ID}">
-        <p ref="string">${data.string}</p>
-        <p ref="number">${data.number}</p>
-        <p ref="object">${data.object.prop}</p>
+      <section ref="section" data-testid="${TEST_ID}">
+        <h1 ref="title">Title</h1>
+        <p ref="content">Content with string: ${"test"}</p>
+        <p ref="number">${90210}</p>
         <ul>
-          ${data.array.map((item: any, index: number) =>
+          ${["Item 1", "Item 2"].map((item, index) =>
             generateChildEl(index, `array-${index}`)
           )}
         </ul>
-        ${data.child} ${data.childArray}
+        ${generateChildEl(0, "child")}
+        ${[
+          generateChildEl(1, "childArray-0"),
+          generateChildEl(2, "childArray-1"),
+        ]}
       </section>
     `;
 
     document.body.append(sectionView);
 
     const elementCollection = sectionView.collect();
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const sectionEl = getByTestId(document.body, TEST_ID);
+    expect(getByTestId(document.body, TEST_ID)).toBeInTheDocument();
 
-    // Assert that all of our refs are collected and actually on the DOM
-    Object.keys(data).forEach(ref => {
-      const prop = data[ref];
-      if (Array.isArray(prop)) {
-        prop.forEach((item, index) => {
-          const derivedRef = `${ref}-${index}`;
-          const el = elementCollection[derivedRef];
-          expect(elementCollection).toHaveProperty(derivedRef);
-          expect(el).toBeInTheDocument();
-        });
-      } else if (prop) {
-        const el = elementCollection[ref];
-        expect(elementCollection).toHaveProperty(ref);
-        expect(el).toBeInTheDocument();
-      }
+    // Verify all refs are collected
+    const expectedRefs = [
+      "section",
+      "title",
+      "content",
+      "number",
+      "array-0",
+      "array-1",
+      "child",
+      "childArray-0",
+      "childArray-1",
+    ];
+
+    expectedRefs.forEach(ref => {
+      expect(elementCollection).toHaveProperty(ref);
+      expect(elementCollection[ref]).toBeInTheDocument();
     });
   });
 });

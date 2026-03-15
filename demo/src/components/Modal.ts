@@ -1,97 +1,153 @@
-import { html, useViewModel, View } from "../../../src";
-import { modalStyles } from "../styles";
+import { createWidget, html } from "../../../src";
+import { Widget } from "../../../src/widget/createWidget";
 import { ContactForm } from "./ContactForm";
+import { css } from "@emotion/css";
 
-const KEY_CODES = Object.freeze({
-  BACKSPACE: 8,
-  TAB: 9,
-  ESCAPE: 27,
-});
+const black = "#111111";
+const white = "#FAFAF8";
+const red = "#D62626";
+const blue = "#1A3FAA";
 
-interface ModalProps {
-  openBtn: string;
-  content: View;
-}
+const triggerCls = css`
+  align-items: center;
+  background: ${red};
+  border: 3px solid ${black};
+  border-radius: 0;
+  bottom: calc(1.5rem + 56px + 0.75rem);
+  box-shadow: 4px 4px 0 ${black};
+  color: ${white};
+  cursor: pointer;
+  display: flex;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 1rem;
+  font-weight: 900;
+  height: 56px;
+  justify-content: center;
+  left: 1.5rem;
+  position: fixed;
+  transition:
+    box-shadow 0.08s,
+    transform 0.08s;
+  width: 56px;
+  z-index: 9100;
+  &:hover {
+    box-shadow: 2px 2px 0 ${black};
+    transform: translate(2px, 2px);
+  }
+  &:active {
+    box-shadow: 0 0 0 ${black};
+    transform: translate(4px, 4px);
+  }
+`;
 
-export const Modal = (modalProps?: ModalProps) => {
-  const viewModel = useViewModel({ isOpen: false, ...modalProps });
-  let isKeyboardNavigating = false;
+const overlayCls = css`
+  align-items: center;
+  background: rgba(17, 17, 17, 0.85);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  transition: opacity 0.12s ease-out;
+  z-index: 9300;
+  &--open {
+    opacity: 1;
+  }
+  &--closed {
+    opacity: 0;
+    pointer-events: none;
+  }
+`;
 
-  const { $isOpen } = viewModel;
+const panelCls = css`
+  background: ${white};
+  border: 3px solid ${black};
+  border-top: 8px solid ${blue};
+  box-shadow: 8px 8px 0 ${black};
+  max-width: 560px;
+  padding: 40px;
+  position: relative;
+  width: 90vw;
+`;
 
-  const view = html` <button class="footer__contact" ref="modalBtn">
-      ${viewModel.$openBtn}
-    </button>
-    <div
-      ref="modal"
-      role="modal"
-      id="modal"
-      aria-labelledby="modal_label"
-      aria-modal="true"
-      aria-hidden="${!viewModel.$isOpen}"
-      class="${modalStyles} modal modal__open--${$isOpen}"
-    >
-      <div ref="modalContent" class="modal__content">
-        <button ref="closeBtn" class="modal__close">✕</button>
-        ${viewModel.$content}
-      </div>
-    </div>`;
+const closeCls = css`
+  align-items: center;
+  background: ${black};
+  border: 3px solid ${black} !important;
+  border-radius: 0 !important;
+  color: ${white};
+  cursor: pointer;
+  display: flex;
+  font-family: inherit;
+  font-size: 1.1rem;
+  font-weight: 900;
+  height: 36px;
+  justify-content: center;
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  transition: background 0.08s;
+  width: 36px;
+  &:hover {
+    background: ${red};
+  }
+`;
 
-  const { modal, modalBtn, modalContent, submitBtn, closeBtn } = view.collect();
+export const ContactWidget = (): Widget<{ isOpen: boolean }> => {
+  let cleanupListeners: (() => void) | undefined;
 
-  /* CLICK HANDLERS */
+  return createWidget({
+    target: "#contact-root",
+    model: { isOpen: false as boolean },
+    render: vm => {
+      const openState = vm.$isOpen.compute((o: boolean) =>
+        o ? "open" : "closed"
+      );
 
-  const toggleOpen = (open = false) => {
-    viewModel.isOpen = open;
-  };
-
-  // Close when background is clicked
-  modal.addEventListener("click", (e: MouseEvent) => {
-    isKeyboardNavigating = false;
-
-    if (
-      e.target instanceof Node &&
-      e.target === modal &&
-      !modalContent.contains(e.target)
-    ) {
-      toggleOpen(false);
-    }
+      return html`
+        <button
+          class="${triggerCls}"
+          aria-label="Open contact form"
+          aria-haspopup="dialog"
+          onclick=${() => {
+            vm.isOpen = true;
+          }}
+        >
+          💌
+        </button>
+        <div
+          class="${overlayCls} ${overlayCls}--${openState}"
+          role="dialog"
+          aria-label="Contact"
+          aria-modal="true"
+          onclick=${(e: MouseEvent) => {
+            if (e.target === e.currentTarget) vm.isOpen = false;
+          }}
+        >
+          <div class="${panelCls}">
+            <button
+              class="${closeCls}"
+              aria-label="Close"
+              onclick=${() => {
+                vm.isOpen = false;
+              }}
+            >
+              ✕
+            </button>
+            ${ContactForm()}
+          </div>
+        </div>
+      `;
+    },
+    onMount: vm => {
+      const onKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Escape" && vm.isOpen) {
+          vm.isOpen = false;
+        }
+      };
+      document.addEventListener("keydown", onKeyDown);
+      cleanupListeners = () =>
+        document.removeEventListener("keydown", onKeyDown);
+    },
+    onDestroy: () => cleanupListeners?.(),
   });
-
-  // Open/Close when the modal button is clicked
-  modalBtn.addEventListener("click", () => {
-    toggleOpen(!viewModel.isOpen);
-  });
-
-  // Close when the exit button is clicked within the modal
-  closeBtn?.addEventListener("click", () => {
-    toggleOpen(false);
-  });
-
-  /* KEY UP HANDLERS */
-
-  // Close on escape
-  document.addEventListener("keyup", (e: KeyboardEvent) => {
-    isKeyboardNavigating = true;
-    const key = e.which || e.keyCode;
-    if (key === KEY_CODES.ESCAPE && viewModel.isOpen) {
-      viewModel.isOpen = false;
-      e.stopPropagation();
-    }
-  });
-
-  /* FOCUS HANDLERS */
-
-  // Cycle through focuable elements on keyboard navigation
-  modalContent.addEventListener("focusout", (e) => {
-    if (
-      isKeyboardNavigating &&
-      e.relatedTarget instanceof Node &&
-      !modalContent.contains(e.relatedTarget)
-    ) {
-      closeBtn.focus();
-    }
-  });
-
-  return view;
 };

@@ -18,14 +18,14 @@ export const CartItem = (product: productType) => {
         </div>
         <div class="item__quantityContainer">
           <button
-            ref="minusBtn"
+            onclick=${() => cart.removeItem(state.id)}
             class="item__quantity item__quantity--minus item__btn"
           >
             -
           </button>
           <p class="item__quantity">${$quantity}</p>
           <button
-            ref="plusBtn"
+            onclick=${() => cart.addItem(state.id)}
             class="item__quantity item__quantity--plus item__btn"
           >
             +
@@ -37,11 +37,6 @@ export const CartItem = (product: productType) => {
       </div>
     </li>
   `;
-
-  const { plusBtn, minusBtn } = element.collect();
-
-  plusBtn.addEventListener("click", () => cart.addItem(state.id));
-  minusBtn.addEventListener("click", () => cart.removeItem(state.id));
 
   return element;
 };

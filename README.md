@@ -1,33 +1,34 @@
 # Marjoram 🌿
 
-**A lightweight, reactive JavaScript library for creating dynamic DOM elements with zero dependencies**
+**A pure-functional, signal-based widget SDK — zero classes, zero dependencies**
 
 [![npm version](https://badge.fury.io/js/marjoram.svg)](https://badge.fury.io/js/marjoram)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
 [![Bundle Size](https://img.shields.io/bundlephobia/minzip/marjoram)](https://bundlephobia.com/package/marjoram)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-✨ **Zero dependencies** - No external libraries required  
-🔒 **XSS safe** - Built-in protection against cross-site scripting  
-📝 **TypeScript support** - Full type safety and IntelliSense  
-⚡ **Lightweight** - Minimal footprint for optimal performance  
-🎯 **Reactive** - Automatic DOM updates when data changes  
+⚡ **~5KB gzipped** · 📦 **Zero dependencies** · 🔒 **XSS safe** · 🎯 **Shadow DOM isolation** · 📝 **TypeScript-first** · 🧬 **Fine-grained signals**
+
+Build self-contained widgets — chat launchers, cookie banners, feedback forms, notification bells — that mount safely into any page, regardless of what framework (or none) the host is using.
+
+**No classes. No decorators. No build step required.** Just functions, signals, and tagged templates.
 
 ---
 
 ## Table of Contents
 
-- [🚀 Getting Started](#getting-started) - Installation and quick start
-- [📖 API Reference](#api-reference) - Core functions and reactive state
+- [🚀 Quick Start](#quick-start) - Build and mount a widget in 30 seconds
+- [📖 API Reference](#api-reference) - `createWidget`, `html`, `useViewModel`, `when`
 - [💡 Examples](#examples) - Todo app, forms, data fetching
 - [🎯 TypeScript Support](#typescript-support) - Type safety and IntelliSense  
-- [⚡ Performance](#performance) - Benchmarks and optimization
+- [🧬 Reactivity](#reactivity) - Signals, computed, and effects
+- [⚡ Performance](#performance) - Real benchmarks with hard numbers
 - [⚠️ Current Limitations](#current-limitations) - Known constraints and workarounds
 - [🤝 Contributing](#contributing) - Development setup and guidelines
 
 ---
 
-## Getting Started
+## Quick Start
 
 ### Installation
 
@@ -35,70 +36,136 @@
 npm install marjoram
 ```
 
-```bash
-pnpm add marjoram
+### Script Tag (No Build Step)
+
+```html
+<script src="https://unpkg.com/marjoram/dist/marjoram.umd.js"></script>
+<script>
+  const { createWidget, html } = window.marjoram;
+</script>
 ```
 
-### Quick Start
+### Your First Widget
 
 ```typescript
-import { html, useViewModel } from 'marjoram';
+import { createWidget, html } from 'marjoram';
 
-// Create reactive state
-const viewModel = useViewModel({ 
-  name: 'World', 
-  count: 0 
+const widget = createWidget({
+  target: '#my-widget',
+  shadow: 'closed',               // Style-isolated from host page
+  styles: `
+    .counter { font-family: system-ui; padding: 1rem; }
+    button { cursor: pointer; padding: 0.25rem 0.75rem; }
+  `,
+  model: {
+    count: 0,
+    doubled: (vm) => vm.count * 2, // Computed property
+  },
+  render: (vm) => html`
+    <div class="counter">
+      <p>Count: ${vm.$count} (doubled: ${vm.$doubled})</p>
+      <button onclick=${() => vm.count++}>+</button>
+      <button onclick=${() => vm.count--}>-</button>
+    </div>
+  `,
 });
 
-// Create reactive view
-const view = html`
-  <div>
-    <h1>Hello, ${viewModel.$name}!</h1>
-    <p>Count: ${viewModel.$count}</p>
-    <button ref="increment">+</button>
-  </div>
-`;
+widget.mount();
 
-// Add event listeners
-const { increment } = view.collect();
-increment.addEventListener('click', () => {
-  viewModel.count++; // Automatically updates the DOM
-});
-
-// Append to DOM
-document.body.appendChild(view);
+// Full cleanup when the widget is removed from the page:
+// widget.destroy();
 ```
 
 ---
+
 ## API Reference
 
-### `html` - Template Literal Function
+### `createWidget` — Widget Factory (Recommended)
 
-Creates a reactive DOM view from a template literal.
+The primary entry point. Creates a self-contained, mountable widget with full lifecycle management.
+
+```typescript
+function createWidget<T>(options: WidgetOptions<T>): Widget<T>
+```
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `target` | `Element \| string` | DOM element or CSS selector to mount into |
+| `shadow` | `'open' \| 'closed'` | Shadow DOM mode for style isolation (optional) |
+| `styles` | `string` | CSS injected alongside the view; scoped automatically with shadow DOM (optional) |
+| `model` | `object` | Initial reactive state. Functions become computed properties. |
+| `render` | `(vm) => View` | Returns the widget's view given the reactive view model |
+| `onMount` | `(vm, refs) => void` | Called after DOM insertion (optional) |
+| `onDestroy` | `(vm) => void` | Called before teardown (optional) |
+
+**Returns:** `{ mount(), destroy(), vm }`
+
+```typescript
+const widget = createWidget({
+  target: '#chat-root',
+  shadow: 'closed',
+  styles: `
+    .chat { position: fixed; bottom: 1rem; right: 1rem; }
+    .chat__panel { display: none; }
+    .chat__panel--open { display: block; }
+  `,
+  model: {
+    open: false,
+    messages: [] as string[],
+    unreadCount: (vm) => vm.messages.length,
+  },
+  render: (vm) => html`
+    <div class="chat">
+      <button onclick=${() => (vm.open = !vm.open)}>
+        💬 ${vm.$unreadCount.compute(n => (n > 0 ? `(${n})` : ''))}
+      </button>
+      <div class="chat__panel chat__panel--${vm.$open.compute(o => o ? 'open' : 'closed')}">
+        ${vm.$messages.compute(msgs => msgs.map(m => html`<p>${m}</p>`))}
+      </div>
+    </div>
+  `,
+  onMount: (vm) => {
+    // Wire up external event sources
+  },
+  onDestroy: (vm) => {
+    // Clean up subscriptions, timers, etc.
+  },
+});
+
+widget.mount();
+```
+
+### `html` — Tagged Template for Reactive Views
+
+Creates a reactive DOM view from a template literal. Use `$`-prefixed properties for reactive bindings.
 
 ```typescript
 function html(strings: TemplateStringsArray, ...args: unknown[]): View
 ```
 
-**Returns:** A `View` (enhanced DocumentFragment) with reactive capabilities.
+**Returns:** A `View` (enhanced DocumentFragment) with `collect`, `mount`, and `unmount` methods.
 
-**Example:**
 ```typescript
-import { html } from 'marjoram';
+import { html, useViewModel } from 'marjoram';
 
+const vm = useViewModel({ name: 'World' });
 const view = html`
   <div>
-    <h1 ref="title">Welcome!</h1>
-    <p>Static content</p>
+    <h1>Hello, ${vm.$name}!</h1>
+    <button ref="rename">Rename</button>
   </div>
 `;
 
-document.body.appendChild(view);
+const { rename } = view.collect();
+rename.addEventListener('click', () => { vm.name = 'Marjoram'; });
+
+view.mount('#app');
+// view.unmount(); // removes from DOM + disposes observers
 ```
 
-#### Collecting References
+#### Element References with `collect()`
 
-Use the `ref` attribute to create element references:
+Use the `ref` attribute to create named element references:
 
 ```typescript
 const view = html`
@@ -109,15 +176,25 @@ const view = html`
 `;
 
 const { saveBtn, cancelBtn } = view.collect();
+saveBtn.addEventListener('click', () => console.log('Saving...'));
+```
 
-saveBtn.addEventListener('click', () => {
-  console.log('Saving...');
+When using `createWidget`, refs are passed to `onMount` automatically:
+
+```typescript
+createWidget({
+  target: '#app',
+  model: {},
+  render: (vm) => html`<button ref="action">Go</button>`,
+  onMount: (vm, refs) => {
+    refs.action.addEventListener('click', () => { /* ... */ });
+  },
 });
 ```
 
-### `useViewModel` - Reactive State Management
+### `useViewModel` — Standalone Reactive State
 
-Creates a reactive view model that automatically updates connected views.
+Creates a reactive view model for use outside of `createWidget`. Prefer `createWidget` for widgets.
 
 ```typescript
 function useViewModel<T extends Model>(model: T): ViewModel<T>
@@ -152,6 +229,59 @@ viewModel.name = 'Jane';
 viewModel.age = 25;
 ```
 
+#### Computed Properties at Model Definition
+
+Define computed properties as functions in your model - they recalculate whenever any property changes:
+
+```typescript
+const viewModel = useViewModel({
+  firstName: 'John',
+  lastName: 'Doe',
+  // Computed property - takes the viewModel as parameter
+  fullName: (vm) => `${vm.firstName} ${vm.lastName}`,
+  
+  price: 100,
+  quantity: 2,
+  // Computed properties can depend on other computed properties
+  subtotal: (vm) => vm.price * vm.quantity,
+  tax: (vm) => vm.subtotal * 0.1,
+  total: (vm) => vm.subtotal + vm.tax
+});
+
+const view = html`
+  <div>
+    <h2>${viewModel.$fullName}</h2>
+    <p>Total: $${viewModel.$total}</p>
+  </div>
+`;
+
+// Update any property - all computed properties recalculate
+viewModel.firstName = 'Jane';  // fullName becomes "Jane Doe"
+viewModel.price = 150;         // all computed properties recalculate
+```
+
+**Key Features:**
+- ✅ **Fine-grained tracking**: Computed properties only recalculate when their actual dependencies change — backed by a signal graph, not brute-force invalidation
+- ✅ **Read-only**: Attempting to set a computed property throws an error
+- ✅ **Chain-able**: Computed properties can depend on other computed properties
+- ✅ **Always fresh**: Reading a computed property always returns the current value
+- ✅ **Zero wasted work**: Diamond dependencies evaluate exactly once per update
+
+**Important:** Computed properties are read-only:
+
+```typescript
+const viewModel = useViewModel({
+  count: 5,
+  doubled: (vm) => vm.count * 2
+});
+
+// ❌ This throws an error
+viewModel.doubled = 100; // Error: Cannot set computed property "doubled"
+
+// ✅ Update the source property instead
+viewModel.count = 10; // doubled automatically becomes 20
+```
+
 #### The `$` Prefix Convention
 
 When using reactive properties in templates, prefix them with `$`:
@@ -174,26 +304,105 @@ viewModel.message = 'Updated!'; // DOM updates automatically
 
 ### Computed Properties
 
-Create derived values that update automatically:
+Marjoram offers two ways to create computed values, each optimized for different use cases:
+
+#### 1. Model-Level Computed Properties (Recommended)
+
+Define computed properties as functions in your model for multi-property dependencies:
+
+```typescript
+const viewModel = useViewModel({
+  firstName: 'John',
+  lastName: 'Doe',
+  email: 'john@example.com',
+  
+  // Computed property with access to entire viewModel
+  fullName: (vm) => `${vm.firstName} ${vm.lastName}`,
+  displayText: (vm) => `${vm.fullName} (${vm.email})`
+});
+
+// Use in templates
+const view = html`<div>${viewModel.$fullName}</div>`;
+
+// Access directly
+console.log(viewModel.fullName); // "John Doe"
+
+// Recalculates when any property changes
+viewModel.firstName = 'Jane';
+console.log(viewModel.fullName); // "Jane Doe"
+```
+
+**When to use:**
+- ✅ Deriving values from **multiple** properties
+- ✅ Complex calculations that need the entire viewModel context
+- ✅ Reusable computed values accessed in multiple places
+
+**Important:** Currently, computed properties recalculate whenever ANY property in the viewModel changes, not just their specific dependencies. This ensures correctness but may impact performance if you have many computed properties or expensive computations.
+
+#### 2. View-Time `.compute()` Method
+
+Chain `.compute()` for simple transformations of a single property:
 
 ```typescript
 const viewModel = useViewModel({ 
   firstName: 'John', 
-  lastName: 'Doe' 
+  active: true,
+  items: ['a', 'b', 'c']
 });
-
-const fullName = viewModel.$firstName.compute((first) => 
-  `${first} ${viewModel.lastName}`
-);
 
 const view = html`
   <div>
-    <p>Full name: ${fullName}</p>
+    <!-- Simple single-property transformation -->
+    <h1>${viewModel.$firstName.compute(name => name.toUpperCase())}</h1>
+    
+    <!-- Conditional rendering -->
+    <span>${viewModel.$active.compute(v => v ? 'Active' : 'Inactive')}</span>
+    
+    <!-- Array rendering -->
+    <ul>
+      ${viewModel.$items.compute(items => items.map(item => html`<li>${item}</li>`))}
+    </ul>
   </div>
 `;
+```
 
-// Computed value updates automatically
-viewModel.firstName = 'Jane';
+**When to use:**
+- ✅ Transforming a **single** property value
+- ✅ Template-specific formatting (e.g., uppercase, date formatting)
+- ✅ View-specific logic that doesn't belong in the model
+
+#### Comparison
+
+| Feature | Model-Level | View-Time `.compute()` |
+|---------|------------|------------------------|
+| **Define** | In viewModel | In template |
+| **Recalculation** | When dependencies change | Only when its property changes |
+| **Can access** | All viewModel properties | Single property value |
+| **Reusability** | High (use anywhere) | Low (template-specific) |
+| **Access** | `vm.propName` or `vm.$propName` | Only in templates via `vm.$prop` |
+| **Read-only** | Yes (throws on set) | N/A (not settable) |
+| **Performance** | Fine-grained (signal-tracked) | Fine-grained (single prop) |
+| **Best for** | Multi-property derived state | Single-property transforms |
+
+**Example combining both:**
+
+```typescript
+const viewModel = useViewModel({
+  items: [{price: 10, qty: 2}, {price: 20, qty: 1}],
+  taxRate: 0.1,
+  
+  // Model-level: calculate subtotal from multiple items
+  subtotal: (vm) => vm.items.reduce((sum, item) => sum + (item.price * item.qty), 0),
+  total: (vm) => vm.subtotal * (1 + vm.taxRate)
+});
+
+const view = html`
+  <div>
+    <p>Subtotal: ${viewModel.$subtotal}</p>
+    <!-- View-time: format the total as currency -->
+    <p>Total: $${viewModel.$total.compute(t => t.toFixed(2))}</p>
+  </div>
+`;
 ```
 
 ---
@@ -214,15 +423,19 @@ const TodoApp = () => {
   const viewModel = useViewModel({
     todos: [] satisfies Todo[],
     newTodo: '',
-    filter: 'all' satisfies 'all' | 'active' | 'completed'
-  });
-
-  const filteredTodos = viewModel.$todos.compute(todos => {
-    switch (viewModel.filter) {
-      case 'active': return todos.filter(t => !t.completed);
-      case 'completed': return todos.filter(t => t.completed);
-      default: return todos;
-    }
+    filter: 'all' satisfies 'all' | 'active' | 'completed',
+    
+    // Computed properties for derived state
+    filteredTodos: (vm) => {
+      switch (vm.filter) {
+        case 'active': return vm.todos.filter(t => !t.completed);
+        case 'completed': return vm.todos.filter(t => t.completed);
+        default: return vm.todos;
+      }
+    },
+    
+    activeCount: (vm) => vm.todos.filter(t => !t.completed).length,
+    completedCount: (vm) => vm.todos.filter(t => t.completed).length
   });
 
   const view = html`
@@ -238,6 +451,11 @@ const TodoApp = () => {
         <button ref="addBtn">Add</button>
       </div>
 
+      <div class="stats">
+        <span>Active: ${viewModel.$activeCount}</span>
+        <span>Completed: ${viewModel.$completedCount}</span>
+      </div>
+
       <div class="filters">
         <button ref="allFilter" class="${viewModel.$filter.compute(f => f === 'all' ? 'active' : '')}">All</button>
         <button ref="activeFilter" class="${viewModel.$filter.compute(f => f === 'active' ? 'active' : '')}">Active</button>
@@ -245,7 +463,7 @@ const TodoApp = () => {
       </div>
 
       <ul class="todo-list">
-        ${filteredTodos.compute(todos => todos.map(todo => html`
+        ${viewModel.$filteredTodos.compute(todos => todos.map(todo => html`
           <li class="${todo.completed ? 'completed' : ''}">
             <input 
               type="checkbox" 
@@ -403,30 +621,19 @@ const ContactForm = () => {
     name: '',
     email: '',
     message: '',
-    errors: {} satisfies Record<string, string>,
-    submitted: false
+    submitted: false,
+    
+    // Computed validation properties
+    nameError: (vm) => !vm.name.trim() ? 'Name is required' : '',
+    emailError: (vm) => {
+      if (!vm.email.trim()) return 'Email is required';
+      if (!/\S+@\S+\.\S+/.test(vm.email)) return 'Email is invalid';
+      return '';
+    },
+    messageError: (vm) => !vm.message.trim() ? 'Message is required' : '',
+    
+    isValid: (vm) => !vm.nameError && !vm.emailError && !vm.messageError
   });
-
-  const validate = () => {
-    const errors: Record<string, string> = {};
-    
-    if (!viewModel.name.trim()) {
-      errors.name = 'Name is required';
-    }
-    
-    if (!viewModel.email.trim()) {
-      errors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(viewModel.email)) {
-      errors.email = 'Email is invalid';
-    }
-    
-    if (!viewModel.message.trim()) {
-      errors.message = 'Message is required';
-    }
-    
-    viewModel.errors = errors;
-    return Object.keys(errors).length === 0;
-  };
 
   const view = html`
     <form class="contact-form" ref="form">
@@ -435,28 +642,34 @@ const ContactForm = () => {
       <div class="field">
         <label>Name:</label>
         <input ref="nameInput" type="text" value="${viewModel.$name}" />
-        ${viewModel.$errors.compute(errors => 
-          errors.name ? html`<span class="error">${errors.name}</span>` : ''
+        ${viewModel.$nameError.compute(err => 
+          err ? html`<span class="error">${err}</span>` : ''
         )}
       </div>
       
       <div class="field">
         <label>Email:</label>
         <input ref="emailInput" type="email" value="${viewModel.$email}" />
-        ${viewModel.$errors.compute(errors => 
-          errors.email ? html`<span class="error">${errors.email}</span>` : ''
+        ${viewModel.$emailError.compute(err => 
+          err ? html`<span class="error">${err}</span>` : ''
         )}
       </div>
       
       <div class="field">
         <label>Message:</label>
         <textarea ref="messageInput">${viewModel.$message}</textarea>
-        ${viewModel.$errors.compute(errors => 
-          errors.message ? html`<span class="error">${errors.message}</span>` : ''
+        ${viewModel.$messageError.compute(err => 
+          err ? html`<span class="error">${err}</span>` : ''
         )}
       </div>
       
-      <button type="submit" ref="submitBtn">Send Message</button>
+      <button 
+        type="submit" 
+        ref="submitBtn"
+        ${viewModel.$isValid.compute(valid => valid ? '' : 'disabled')}
+      >
+        Send Message
+      </button>
       
       ${viewModel.$submitted.compute(v => v ? html`
         <div class="success">Message sent successfully!</div>
@@ -481,7 +694,7 @@ const ContactForm = () => {
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    if (validate()) {
+    if (viewModel.isValid) {
       viewModel.submitted = true;
       // Reset form after 3 seconds
       setTimeout(() => {
@@ -489,7 +702,6 @@ const ContactForm = () => {
         viewModel.email = '';
         viewModel.message = '';
         viewModel.submitted = false;
-        viewModel.errors = {};
       }, 3000);
     }
   });
@@ -530,52 +742,144 @@ const view: View = html`
 const refs: { header: HTMLElement } = view.collect();
 ```
 
-## Performance
+## Reactivity
 
-Marjoram delivers optimal performance through careful design:
+Marjoram's reactivity is built on a **fine-grained signal graph**. Computed properties automatically track which signals they read and only re-evaluate when those specific dependencies change — no virtual DOM diffing, no brute-force invalidation.
 
-- **🗜️ Bundle size**: 4.8KB gzipped
-- **📦 Zero dependencies**: No external libraries
-- **⚡ Efficient updates**: Only changed DOM nodes are updated
-- **🧠 Memory efficient**: Automatic cleanup of event listeners
+### Signal Primitives
 
-### Benchmarks
+The signal primitives are available for direct use when you need reactive state outside of `createWidget`:
 
-Performance comparison for common web application operations:
+```typescript
+import { signal, computed, effect, batch } from 'marjoram';
 
-| Operation | Marjoram | Vanilla JS | React | Vue 3 | Svelte | Advantage |
-|-----------|----------|------------|-------|-------|--------|-----------|
-| **Bundle Size** | 4.8KB | 0KB | 42.2KB | 34.1KB | 9.6KB | **89% smaller** than React |
-| **Create 1K Items** | 12ms | 8ms | 18ms | 15ms | 10ms | **33% faster** than React |
-| **Update 1K Items** | 6ms | 4ms | 12ms | 9ms | 7ms | **50% faster** than React |
-| **Memory (1K items)** | 2.1MB | 1.8MB | 3.4MB | 2.9MB | 2.3MB | **38% less** than React |
+// Writable reactive value
+const count = signal(0);
+count();       // read: 0 (tracks caller as subscriber)
+count.set(5);  // write: notifies dependents
+count.peek();  // read without tracking
 
-*Benchmarks conducted on MacBook Pro M1, Chrome 118. Results may vary by device and use case.*
+// Derived value — auto-tracks dependencies
+const doubled = computed(() => count() * 2);
+doubled(); // 10 — recomputes only when count changes
 
-#### Why Marjoram Outperforms
+// Side-effect — re-runs when dependencies change
+const dispose = effect(() => {
+  console.log(`Count is now: ${count()}`);
+});
 
-- **Zero Virtual DOM overhead** - Direct DOM manipulation without reconciliation layers
-- **Minimal runtime** - No complex framework machinery or lifecycle management
-- **Targeted updates** - Only changed properties trigger DOM updates, not entire component trees
-- **Compile-time optimizations** - Template literals are parsed and optimized at build time
-- **No hydration costs** - Direct DOM creation without client-side rehydration
+// Batch multiple writes into a single notification pass
+batch(() => {
+  count.set(10);
+  // other signal writes...
+});
 
-#### Custom Performance Testing
-
-To implement your own benchmarks:
-
-```bash
-npm install && npm test  # Includes performance tests
-npm run build           # Analyze bundle size
+dispose(); // stop the effect
 ```
 
-*Custom benchmark scripts can be added to the `/benchmarks` directory. Performance results are device and browser dependent.*
+### How it works under the hood
+
+1. **`useViewModel`** wraps each model property in a `signal`
+2. Computed properties (functions in the model) become `computed()` signals that auto-track their dependencies
+3. **`html` templates** bind DOM nodes to signals via `SchemaProp.observe()` — updates are batched through the microtask queue
+4. When you write `vm.count = 5`, only the signals that depend on `count` recompute — everything else is untouched
+
+```typescript
+const vm = useViewModel({
+  firstName: 'John',
+  lastName: 'Doe',
+  age: 30,
+  fullName: (vm) => `${vm.firstName} ${vm.lastName}`,  // tracks firstName + lastName
+  isAdult: (vm) => vm.age >= 18,                         // tracks age only
+});
+
+vm.age = 25;  // isAdult recomputes; fullName does NOT
+```
+
+---
+
+## Performance
+
+Real numbers from the benchmark suite (`npm test -- --testPathPattern=benchmark`).
+
+### Widget Creation
+
+| Operation | Time | Per Widget |
+|-----------|------|------------|
+| Create + mount + destroy 1 widget | ~560μs | — |
+| Create + mount + destroy 100 widgets | ~9ms | ~93μs |
+| Create + mount + destroy 1000 widgets | ~297ms | ~297μs |
+
+### Update Throughput
+
+| Operation | Time | Throughput |
+|-----------|------|------------|
+| 10,000 sequential property updates | ~3.5ms | ~2,800 ops/ms |
+| 5,000 multi-property updates (5 props) | ~1.8ms | ~2,800 ops/ms |
+| 1,000 computed chain updates (3-deep) | ~820μs | — |
+| 1,000 array pushes | ~32ms | — |
+
+### Signal Primitives
+
+| Operation | Time | Throughput |
+|-----------|------|------------|
+| 100k raw signal writes | ~5.7ms | ~17,500 ops/ms |
+| 10k signal→computed updates | ~580μs | ~17,100 ops/ms |
+| Diamond dependency (1000 updates) | 1000 evals | Zero wasted work |
+
+*Measured in jsdom (Jest). Browser performance will differ — run `npm test -- --testPathPattern=benchmark` for your environment.*
+
+### Why it's fast
+
+- **Signal-graph propagation** — only touched nodes recompute, no tree diffing
+- **Lazy computed signals** — derived values recompute on read, not on write
+- **Microtask-batched DOM** — multiple writes coalesce into a single DOM update
+- **Template caching** — `html` tagged templates parse once, clone on re-use (fast C++ `cloneNode`)
+- **Zero runtime framework** — no scheduler, no fiber tree, no reconciler
+
+### Run benchmarks yourself
+
+```bash
+npm test -- --testPathPattern=benchmark --verbose
+```
 
 ---
 
 ## Current Limitations
 
 While Marjoram provides powerful reactive capabilities, there are some architectural limitations to be aware of:
+
+### Function Properties as Computed
+
+**All functions in a viewModel are treated as computed properties:**
+
+```typescript
+const viewModel = useViewModel({
+  count: 5,
+  // ✅ This is a computed property (takes viewModel as parameter)
+  doubled: (vm) => vm.count * 2
+});
+
+// ❌ You cannot store regular functions in viewModels
+const viewModel = useViewModel({
+  count: 5,
+  increment: () => count++ // This will be treated as a computed property
+});
+```
+
+**Workaround:** Define actions and event handlers outside the viewModel:
+
+```typescript
+const viewModel = useViewModel({ count: 0 });
+
+// ✅ Define functions outside the viewModel
+const increment = () => viewModel.count++;
+const decrement = () => viewModel.count--;
+
+const view = html`<button ref="btn">Count: ${viewModel.$count}</button>`;
+const { btn } = view.collect();
+btn.addEventListener('click', increment);
+```
 
 ### Deep Nested Property Reactivity
 
@@ -658,17 +962,24 @@ const total = viewModel.$items.reduce((sum, x) => sum + x, 0);
 
 ### Performance Considerations
 
-- **Large Object Updates**: Updating very large nested objects may not perform optimally
-- **Computed Properties**: Heavy computations in computed properties can impact performance
-- **Memory**: Long-lived applications should be mindful of observer cleanup
+- **Computed properties** use fine-grained signal tracking — they only recompute when their actual dependencies change
+- **DOM updates** are batched via microtask queue. Multiple property writes in the same tick produce a single DOM update
+- **Memory**: `widget.destroy()` and `view.unmount()` dispose all signals and observers. Long-lived apps should call these on removal
+- **Large Object Updates**: Deep nested object updates require parent reassignment (see Limitations)
+
+**Note on Testing:** When writing tests with computed properties, flush the microtask queue twice:
+
+```typescript
+viewModel.count = 10;
+await flushMicrotasks(); // Flush property update
+await flushMicrotasks(); // Flush computed property DOM update
+```
 
 ### Planned Improvements
 
-These limitations are known and being addressed in future versions:
-
 - **Deep reactivity for nested objects** - Automatic detection of nested property changes
-- **Array mutation tracking** - Direct support for push, pop, splice operations  
-- **Performance optimizations** - Enhanced handling for large datasets and complex object graphs
+- **Framework adapters** - First-class `<marjoram-widget>` custom element wrappers for React/Vue/Angular host pages
+- **Widget distribution tooling** - Config schemas, sandbox policies, inter-widget communication
 
 For current workarounds and best practices, see the [examples](#examples) section above.
 

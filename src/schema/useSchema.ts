@@ -12,6 +12,8 @@ export const useSchema = function (instance?: Schema): Schema {
   const schema = {
     ids: [],
     props: [],
+    keyMap: new Map<string, SchemaProp>(),
+    idMap: new Map<string, SchemaProp>(),
     defineProperty<T extends SchemaPropValue>(
       value: T,
       key?: string
@@ -22,9 +24,11 @@ export const useSchema = function (instance?: Schema): Schema {
         const { id } = schemaProp;
 
         // Does the schema prop exist in this schema already?
-        if (!this.hasId(id)) {
+        if (!this.idMap.has(id)) {
           this.props.push(schemaProp);
           this.ids.push(id);
+          this.idMap.set(id, schemaProp);
+          if (schemaProp.key) this.keyMap.set(schemaProp.key, schemaProp);
         }
 
         // Type assertion is required here because TypedSchemaProp<T> is a conditional type
@@ -39,6 +43,8 @@ export const useSchema = function (instance?: Schema): Schema {
 
       this.props.push(schemaProp);
       this.ids.push(schemaProp.id);
+      this.idMap.set(schemaProp.id, schemaProp);
+      this.keyMap.set(safeKey, schemaProp);
 
       // Type assertion is necessary because:
       // 1. TypedSchemaProp<T> is a conditional type resolved at compile time
@@ -47,19 +53,26 @@ export const useSchema = function (instance?: Schema): Schema {
       return schemaProp as unknown as TypedSchemaProp<T>;
     },
     getPropertyByKey(key) {
-      return this.props.find(({ key: propKey }) => propKey === key);
+      return this.keyMap.get(key);
     },
     getPropertyByValue(value) {
       return this.props.find(({ value: propValue }) => propValue === value);
     },
     getPropertyById(id) {
-      return this.props.find(({ id: _id }) => _id === id);
+      return this.idMap.get(id);
     },
     hasProperty(key) {
-      return this.props.some(item => item.key === key);
+      return this.keyMap.has(key);
     },
     hasId(id) {
-      return this.ids.some(_id => _id === id);
+      return this.idMap.has(id);
+    },
+    dispose() {
+      this.props.forEach(prop => prop.dispose());
+      this.ids = [];
+      this.props = [];
+      this.keyMap.clear();
+      this.idMap.clear();
     },
   } satisfies Schema;
 
