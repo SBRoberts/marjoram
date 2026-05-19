@@ -188,10 +188,7 @@ export class SchemaProp {
     const parent = node.parentElement;
     return (newValue: SchemaPropValue): void => {
       if (node instanceof Attr) {
-        node.value = node.value.replace(
-          String(oldValue),
-          String(newValue)
-        );
+        node.value = node.value.replace(String(oldValue), String(newValue));
       } else if (Array.isArray(newValue)) {
         parent?.replaceChildren(...(newValue as (string | Node)[]));
       } else {
