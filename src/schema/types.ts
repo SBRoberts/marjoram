@@ -9,7 +9,7 @@ export type SchemaPropValue =
   | SchemaPropValue[];
 export type SchemaPropNotify = (newValue: SchemaPropValue) => void;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type SchemaPropExpression = (value: any) => SchemaPropValue;
+export type SchemaPropExpression = (value: any) => any;
 
 // Array method types for schema properties
 export type SchemaArrayMethods<T> = Pick<

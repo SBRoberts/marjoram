@@ -54,7 +54,7 @@ describe("repeat() keyed list reconciliation", () => {
         ],
       });
       const view = html`<ul data-testid="${TEST_ID}">
-        ${repeat(
+        ${repeat<{ id: number; text: string }>(
           vm.$items,
           i => i.id,
           i => html`<li>${i.text}</li>`
@@ -72,7 +72,7 @@ describe("repeat() keyed list reconciliation", () => {
         items: [{ id: 1, text: "First" }],
       });
       const view = html`<ul data-testid="${TEST_ID}">
-        ${repeat(
+        ${repeat<{ id: number; text: string }>(
           vm.$items,
           i => i.id,
           i => html`<li>${i.text}</li>`
@@ -100,7 +100,7 @@ describe("repeat() keyed list reconciliation", () => {
         ],
       });
       const view = html`<ul data-testid="${TEST_ID}">
-        ${repeat(
+        ${repeat<{ id: number; text: string }>(
           vm.$items,
           i => i.id,
           i => html`<li>${i.text}</li>`
@@ -130,7 +130,7 @@ describe("repeat() keyed list reconciliation", () => {
         ],
       });
       const view = html`<ul data-testid="${TEST_ID}">
-        ${repeat(
+        ${repeat<{ id: number; text: string }>(
           vm.$items,
           i => i.id,
           i => html`<li>${i.text}</li>`
@@ -170,7 +170,7 @@ describe("repeat() keyed list reconciliation", () => {
         ],
       });
       const view = html`<ul data-testid="${TEST_ID}">
-        ${repeat(
+        ${repeat<{ id: number; text: string }>(
           vm.$items,
           i => i.id,
           i => html`<li>${i.text}</li>`
@@ -204,7 +204,7 @@ describe("repeat() keyed list reconciliation", () => {
         ],
       });
       const view = html`<ul data-testid="${TEST_ID}">
-        ${repeat(
+        ${repeat<{ id: number; text: string }>(
           vm.$items,
           i => i.id,
           i => html`<li>${i.text}</li>`
@@ -235,7 +235,7 @@ describe("repeat() keyed list reconciliation", () => {
         ],
       });
       const view = html`<ul data-testid="${TEST_ID}">
-        ${repeat(
+        ${repeat<{ id: number; text: string }>(
           vm.$items,
           i => i.id,
           i => html`<li>${i.text}</li>`
@@ -255,7 +255,7 @@ describe("repeat() keyed list reconciliation", () => {
         items: [{ id: 1, text: "First" }],
       });
       const view = html`<ul data-testid="${TEST_ID}">
-        ${repeat(
+        ${repeat<{ id: number; text: string }>(
           vm.$items,
           i => i.id,
           i => html`<li>${i.text}</li>`
@@ -280,7 +280,7 @@ describe("repeat() keyed list reconciliation", () => {
         ],
       });
       const view = html`<ul data-testid="${TEST_ID}">
-        ${repeat(
+        ${repeat<{ id: number; text: string }>(
           vm.$items,
           i => i.id,
           i => html`<li>${i.text}</li>`
