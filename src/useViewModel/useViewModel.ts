@@ -58,17 +58,19 @@ export const useViewModel = function <TModel extends Model>(
   model = { ...model };
 
   // Identify computed properties (functions in the model)
-  const computedFunctions = new Map<string, Function>();
+  const computedFunctions = new Map<string, (vm: unknown) => unknown>();
   for (const key in model) {
     const value = model[key];
     if (typeof value === "function") {
-      computedFunctions.set(key, value);
+      computedFunctions.set(key, value as (vm: unknown) => unknown);
       delete model[key];
     }
   }
 
-  // Create proxy reference for computed functions to access
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // Create proxy reference for computed functions to access.
+  // Must be `let` — assigned after the proxy is created to break the circular
+  // reference between `traps` (which captures proxyRef) and `proxy` itself.
+  // eslint-disable-next-line prefer-const, @typescript-eslint/no-explicit-any
   let proxyRef: any;
 
   // Signal-backed computed properties: each creates a ReadonlySignal that

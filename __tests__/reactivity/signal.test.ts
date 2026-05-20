@@ -1,4 +1,5 @@
 import { signal, computed, effect, batch, untracked } from "../../src/reactivity";
+import { useViewModel } from "../../src";
 
 const flush = () => new Promise<void>(resolve => queueMicrotask(resolve));
 
@@ -249,8 +250,6 @@ describe("Signal Primitives", () => {
 
   describe("Fine-grained dependency tracking in ViewModel", () => {
     it("should only re-evaluate computed props that depend on the changed signal", () => {
-      const { useViewModel } = require("../../src");
-
       let nameComputeCount = 0;
       let ageComputeCount = 0;
 

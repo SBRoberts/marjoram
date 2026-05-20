@@ -35,7 +35,7 @@ export const when = (
   const empty = (): Node => document.createTextNode("");
 
   const getNode = (value: unknown): Node =>
-    Boolean(value) ? truthy() : (falsy?.() ?? empty());
+    value ? truthy() : (falsy?.() ?? empty());
 
   // Static condition — return the correct node directly, no reactive overhead
   if (typeof condition === "boolean") {
