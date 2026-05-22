@@ -65,12 +65,26 @@ export type Store<T extends object> = T & { readonly [__brand]: "Store" };
 
 // Inspect & escape hatches
 export function snapshot<T extends object>(s: Store<T>): T;
-export function subscribe<T extends object>(
+
+// Typed-path subscribe. Use "" as the path to subscribe to any change.
+export function subscribe<T extends object, P extends Path<T> | "">(
   s: Store<T>,
-  callback: (newValue: T, oldValue: T, path: ReadonlyArray<PropertyKey>) => void
+  path: P,
+  callback: P extends "" ? (newValue: T, oldValue: T) => void
+                         : (newValue: PathValue<T, P>, oldValue: PathValue<T, P>) => void
 ): () => void;
+
 export function isStore(value: unknown): value is Store<object>;
 export function unwrap<T extends object>(s: Store<T>): T;
+
+// Mark an object as non-reactive even if it's a plain object/array.
+// The marked value passes through stores untouched, never proxied.
+export function markRaw<T extends object>(value: T): T;
+
+// Path type helpers (zero runtime cost — TypeScript only).
+// See docs/STORE_RESEARCH_FINDINGS.md §8 for the exact implementation.
+export type Path<T> = /* depth-capped recursive dotted-string union */ string;
+export type PathValue<T, P extends string> = /* resolves path to value type */ unknown;
 
 // Options
 export interface StoreOptions {
@@ -102,21 +116,49 @@ Returns a deep plain-object copy of the store at this moment. Use for serializat
 JSON.stringify(snapshot(state)); // safe, deep, plain
 ```
 
-### 4.3 `subscribe(s, callback)`
+### 4.3 `subscribe(s, path, callback)`
 
-The low-level escape hatch. Use only when `effect()` doesn't fit (e.g., wiring stores to non-reactive subsystems). Callback receives `(newValue, oldValue, path)` where `path` is the property keys from the store root to the changed location. Returns an unsubscribe function.
+The low-level escape hatch with a typed path filter. Use only when `effect()` doesn't fit (e.g., wiring stores to non-reactive subsystems). Callback receives `(newValue, oldValue)` for the value at `path`. Pass `""` as the path to subscribe to any change anywhere. Returns an unsubscribe function.
 
 Prefer `effect()` for almost everything — `subscribe` exists for interop, not idiomatic use.
 
 ```ts
-const off = subscribe(state, (next, prev, path) => {
-  console.log("Changed at", path.join("."), prev, "→", next);
+// Subscribe to a specific path. Compile-time validated:
+const offName = subscribe(state, "user.name", (next, prev) => {
+  console.log("Name changed:", prev, "→", next); // next, prev are typed as string
 });
+
+// Subscribe to any change anywhere:
+const offAll = subscribe(state, "", (next, prev) => {
+  console.log("Store updated"); // next, prev are typed as T (the whole store)
+});
+
 // later:
-off();
+offName();
+offAll();
 ```
 
-### 4.4 `isStore(value)` and `unwrap(s)`
+The path string is checked against `T` at compile time. `subscribe(state, "user.nope", cb)` is a type error if `T['user']` has no `nope` property. See §8 for path-type details.
+
+### 4.4 `markRaw(value)`
+
+Marks a plain object or array so that `store()` will **never** proxy it. Useful for stashing arbitrary non-reactive payloads (a config blob, a parsed AST, a 3rd-party library's state) inside a store. Once marked, the object passes through untouched — reads return the raw value, writes to nested keys are invisible to the store.
+
+```ts
+import { store, markRaw } from "marjoram";
+
+const state = store({
+  user: { name: "Alice" },
+  parsedAst: markRaw(largeAstFromParser), // ignored by reactivity
+});
+
+state.parsedAst.someNode = "x"; // no notification, no overhead
+state.user.name = "Bob";        // reactive, granular as always
+```
+
+This is the same idea as Vue's `markRaw` — opt out a single value from being made reactive. Combined with the §6 boundary rules (class instances, `Date`, `Map`, `Set` pass through automatically), `markRaw` covers the rare case where you have a plain object you want to keep outside the proxy tree.
+
+### 4.5 `isStore(value)` and `unwrap(s)`
 
 Type guard and raw-object accessor. `unwrap` is the same shape as Vue's `toRaw` — useful for interop with code that needs the underlying object (libraries that key off identity, DOM diff'ers, etc.). Mutating the unwrapped object **does not** notify subscribers — it bypasses reactivity. This is intentional and matches the precedent.
 
@@ -421,13 +463,18 @@ Scope guard — features we considered and rejected (for v1.1):
 - **Cross-store derivations as a built-in primitive.** Already covered by `computed()` reading from multiple stores.
 - **Server/client serialization protocol.** `snapshot()` is the building block; SSR hydration is a downstream library, not a primitive concern.
 
-## 14. Open questions (still genuinely open)
+## 14. Open questions
 
-Questions that need a decision before Phase 2 begins. The plan locked one of these already (auto-storing in `useViewModel` → **no**, explicit only). Remaining:
+All previously-open design questions have been resolved by the research pass documented in [STORE_RESEARCH_FINDINGS.md](STORE_RESEARCH_FINDINGS.md):
 
-1. **`produce`-style transactions.** Confirmed: lean is to rely on `batch(() => { ... })` and not ship a separate `produce` API. Want a final yes before locking. (Argument for `produce`: easier mental model for users coming from Redux Toolkit / Immer. Argument against: it would require us to ship structural sharing, growing the bundle materially, for a use case `batch` already covers.)
-2. **Path-binding proxy method collision policy.** When a store key happens to be named `compute`, `observe`, `value`, or `peek`, the method wins (per §10.1). Alternative: the data wins and methods move under a namespaced key like `state.$user.$$compute(...)`. Current lean: method wins + dev-mode warning, matches Vue precedent. Want a final decision.
-3. **Should `subscribe()` accept a path filter?** E.g., `subscribe(s, ["user", "name"], cb)`. The leaner v1 API is "no — use `effect` for path-scoped subscription." Want confirmation.
+| ID | Question | Resolution | Reason |
+|---|---|---|---|
+| 1 | Auto-store nested plain objects in `useViewModel`? | **No** — explicit `store()` only | Non-breaking-change rule (see [STORE_IMPLEMENTATION_PLAN.md](STORE_IMPLEMENTATION_PLAN.md)) |
+| 2 | `produce`-style transactions? | **No** — `batch()` covers it | Valtio ships without; structural-sharing cost not worth it |
+| 3 | Method-vs-data collision policy on path-binding proxies? | **Method wins, dev-mode warning** | Matches Vue's `.value` precedent |
+| 4 | `subscribe()` accepts a path filter? | **Yes — compile-time-typed path** | See §4.3, §8 |
+
+Phase 2 implementation can proceed.
 
 ## 15. Worked examples (audience: users)
 

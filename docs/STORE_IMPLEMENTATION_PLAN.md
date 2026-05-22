@@ -65,28 +65,185 @@ Land this as an issue/PR first to get alignment before code.
 
 `src/reactivity/store.ts`. Built on the existing primitives — no new core.
 
-- **One `SignalNode` per tracked path.** Created lazily on first read of that path. Stored in a tree mirroring the data shape, with `WeakRef`-based GC for paths no longer reachable.
-- **Proxy handlers**:
-  - `get`: registers the active subscriber against the path's `SignalNode`, returns either the primitive value or a (cached) child proxy.
-  - `set`: `Object.is` short-circuit; updates underlying object; notifies the path's `SignalNode`; if the assigned value is itself an object, invalidates the cached child proxy.
-  - `deleteProperty`: notifies the path *and* the parent (key set changed).
-  - `has` / `ownKeys`: track parent for iteration sensitivity (so `for (k in store)` is reactive to key additions).
-- **Identity cache**: `WeakMap<RawObject, Proxy>` so `store.user === store.user`.
-- **Cycle detection**: `WeakSet` during proxy creation; cycles return the existing proxy.
+The patterns below are verified against competitor source in [STORE_RESEARCH_FINDINGS.md](STORE_RESEARCH_FINDINGS.md). All cite-able file:line refs resolve inside `.research/{solid,vue,valtio}` (gitignored).
 
-**Acceptance:** Internal `store()` exists with full TypeScript types. Basic granularity test passes (writing to one path wakes only that path's subscriber). Not yet integrated with view layer.
+### Internal layout
+
+Three well-known symbols on raw objects (Solid `store.ts:6-9` pattern, generalized):
+
+```ts
+const $RAW    = Symbol("marjoram.raw");    // proxy → raw lookup via get-trap
+const $PROXY  = Symbol("marjoram.proxy");  // raw → proxy identity cache (defineProperty, non-enumerable)
+const $NODE   = Symbol("marjoram.node");   // raw → Record<key, SignalNode>, lazy
+```
+
+Plus Vue-style flag keys ([Vue `constants.ts:11-24`](../../.research/vue/packages/reactivity/src/constants.ts)) intercepted in the `get` trap:
+
+```ts
+const FLAG_IS_STORE = "__m_isStore";
+const FLAG_SKIP     = "__m_skip";        // markRaw bypass
+```
+
+### Hot path — `get` trap
+
+```ts
+// Pseudo-code, ~25 lines in real impl
+function get(raw: object, key: PropertyKey, receiver: object): unknown {
+  // Flag interceptions (~5 LoC, free)
+  if (key === FLAG_IS_STORE) return true;
+  if (key === $RAW) return raw;
+
+  const value = Reflect.get(raw, key, receiver);
+
+  // Tracking — only if a subscriber is active (reads-are-free guarantee)
+  if (activeSubscriber) trackPath(raw, key);
+
+  // Lazy nested proxying
+  if (shouldProxy(value)) return wrap(value as object);
+  return value;
+}
+```
+
+`shouldProxy` returns false for: primitives, `null`, `undefined`, `markRaw`-tagged values (`FLAG_SKIP`), class instances (non-Object prototype), `Date`/`Map`/`Set`/`RegExp`/`Promise`/typed arrays, DOM nodes, frozen objects.
+
+### Hot path — `set` trap
+
+```ts
+function set(raw: object, key: PropertyKey, value: unknown, receiver: object): boolean {
+  const oldValue = (raw as any)[key];
+  if (Object.is(oldValue, value)) return true;
+  const isNewKey = !(key in raw);
+  (raw as any)[key] = value;
+  notifyPath(raw, key);                  // SignalNode for this path
+  if (isNewKey) notifyKeys(raw);         // iteration sentinel on parent
+  if (typeof oldValue === "object" && oldValue !== null) {
+    invalidateProxy(oldValue);           // replaced subtree → drop $PROXY/$NODE
+  }
+  return true;
+}
+```
+
+### Lazy identity cache
+
+```ts
+// Solid store.ts:49-84 pattern
+function wrap(raw: object): object {
+  let proxy = (raw as any)[$PROXY];
+  if (!proxy) {
+    proxy = new Proxy(raw, handler);
+    Object.defineProperty(raw, $PROXY, { value: proxy }); // non-enumerable
+  }
+  return proxy;
+}
+```
+
+`state.user === state.user` follows for free; no parallel WeakMap.
+
+### Lazy SignalNode allocation
+
+```ts
+// Solid store.ts:138-153 pattern, using our existing SignalNode
+function trackPath(raw: object, key: PropertyKey): void {
+  // activeSubscriber check already happened in get()
+  let nodes = (raw as any)[$NODE];
+  if (!nodes) {
+    nodes = Object.create(null);
+    Object.defineProperty(raw, $NODE, { value: nodes });
+  }
+  let node: SignalNode | undefined = nodes[key];
+  if (!node) {
+    node = createSignalNode((raw as any)[key]);
+    nodes[key] = node;
+  }
+  // Subscribe via existing signal machinery
+  node._subscribers.add(activeSubscriber!);
+  activeSubscriber!._sources.add(node);
+}
+```
+
+Critical: nodes are **not** created at proxy time or read time — only when a tracked read actually needs one. This is the implementation of the "reads are free outside reactive contexts" guarantee.
+
+### Cycle handling
+
+```ts
+// Valtio vanilla.ts:143 pattern — short-circuit on already-proxied input
+function store<T extends object>(initial: T): Store<T> {
+  if ((initial as any)[FLAG_IS_STORE]) return initial as Store<T>;
+  return wrap(initial) as Store<T>;
+}
+```
+
+A store created from a sub-proxy returns the sub-proxy itself. Cycles in the data graph resolve naturally because `wrap` is idempotent via the `$PROXY` cache.
+
+### `markRaw`
+
+```ts
+// Vue reactive.ts:423-428 pattern
+export function markRaw<T extends object>(value: T): T {
+  Object.defineProperty(value, FLAG_SKIP, { value: true, configurable: true });
+  return value;
+}
+```
+
+Checked in `shouldProxy()`. ~3 LoC of integration.
+
+### Acceptance criteria
+
+- `store()` exists with full TypeScript types (`Store<T>`, `Path<T>`, `PathValue<T, P>` per [STORE_RESEARCH_FINDINGS.md §8](STORE_RESEARCH_FINDINGS.md)).
+- `state.user === state.user` holds across reads.
+- Reading outside any tracked context allocates zero `SignalNode`s (assert via instrumentation in tests).
+- Writing `state.a.b = x` notifies exactly the subscribers of path `a.b` — no parent, no siblings (granularity test).
+- `markRaw(obj)` round-trips: `(store({x: markRaw(o)}).x === o) === true`, and mutations to `o.foo` do not notify.
+- Existing tests for `signal`, `computed`, `effect`, `batch`, `untracked` still pass byte-identical.
 
 ## Phase 3 — Array and built-in handling
 
-This is where most competitors leak abstraction. Specifically:
+The patterns below are verified in `.research/` (gitignored, see [STORE_RESEARCH_FINDINGS.md §5](STORE_RESEARCH_FINDINGS.md)).
 
-- **Array indices and `.length`**: each is its own tracked path. `arr.push(x)` notifies both the new index *and* `length` — `arr.map` over a reactive store wakes only on length+content changes, not on every index read.
-- **Mutating array methods** (`push`/`pop`/`shift`/`unshift`/`splice`/`sort`/`reverse`/`fill`/`copyWithin`) are wrapped to batch their internal mutations and emit a single coherent notification round.
-- **Read-only array methods** (`map`/`filter`/`forEach`/...) work via the standard proxy `get` path — no override needed.
-- **Built-in passthrough**: `Date`, `Map`, `Set`, `WeakMap`, `WeakSet`, `RegExp`, `Promise`, `ArrayBuffer`, typed arrays, DOM nodes, functions, anything whose prototype isn't `Object.prototype` or `Array.prototype`. They're stored as-is; mutating them is invisible to the store (documented). For users who want reactive `Map`/`Set`, that's a future `reactiveMap`/`reactiveSet` discussion — out of scope.
-- **Class instances**: bypass entirely. This is the "least surprise" choice; Vue's `markRaw` exists because they got this wrong initially.
+### Array mutating methods — Solid `createMutable` pattern
 
-**Acceptance:** Array mutation methods produce correct, batched notifications. Built-in types pass through verifiably (referential equality preserved).
+The elegant move from [Solid `mutable.ts:55-58`](../../.research/solid/packages/solid/store/src/mutable.ts):
+
+```ts
+// Inside the get-trap, before flag/raw checks:
+if (Array.isArray(raw) && typeof (raw as any)[key] === "function" && key in Array.prototype) {
+  const method = (raw as any)[key];
+  return (...args: unknown[]) => batch(() => method.apply(receiver, args));
+}
+```
+
+Three lines, replaces Vue's 373-LoC `arrayInstrumentations.ts`. A single `arr.push(a, b, c)` runs inside `batch()`, so the inner index writes + length write fire as one notification round.
+
+- **Indices and `.length` are tracked as ordinary path keys.** No special instrumentation table.
+- **Read-only methods** (`map`/`filter`/`forEach`/`find`/`some`/`every`/...) work via the standard proxy `get` path — iteration registers per-index dependencies, no override needed.
+- **Iteration sentinel**: a single `keysNode` on the parent ([Vue `dep.ts:242` `ITERATE_KEY` pattern](../../.research/vue/packages/reactivity/src/dep.ts)) notifies on key add/delete (for `for...in` reactivity and `arr.length`-aware iteration).
+
+### Built-in passthrough — `shouldProxy()` rules
+
+Verified against [Valtio `vanilla.ts:64-76`](../../.research/valtio/src/vanilla.ts) plus standard JS semantics:
+
+```ts
+function shouldProxy(value: unknown): boolean {
+  if (value === null || typeof value !== "object") return false;
+  if ((value as any)[FLAG_SKIP]) return false;            // markRaw
+  if (Object.isFrozen(value)) return false;                // frozen objects
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== Array.prototype && proto !== null) return false;
+  return true;
+}
+```
+
+Result: `Date`, `Map`, `Set`, `WeakMap`, `WeakSet`, `RegExp`, `Promise`, `ArrayBuffer`, typed arrays, DOM nodes, functions, class instances all pass through untouched. Mutating them is invisible to the store. **No `markRaw` needed for any of them** — the prototype check handles it.
+
+Reactive `Map`/`Set` variants are explicitly **out of scope** for v1.1 ([STORES.md §13](STORES.md)). Vue's `collectionHandlers.ts` (330 LoC) shows the complexity; the embeddable-widget use case rarely needs it.
+
+### Acceptance
+
+- `arr.push(a, b, c)` produces exactly one notification round (instrumented assertion).
+- Setting `arr[3] = x` notifies subscribers of `arr[3]` only — not `arr.length`, not `arr[0..2]`.
+- `Object.isFrozen(obj) === true` ⇒ `store({ x: obj }).x === obj` (identity preserved, not proxied).
+- `new Date()` round-trips by reference; `state.d.setHours(...)` is invisible (documented behavior).
+- `markRaw(plainObj)` round-trips; mutations don't notify.
 
 ## Phase 4 — Integration
 
@@ -101,13 +258,80 @@ The point of building on existing primitives is that integration should be *triv
 
 ## Phase 5 — DX polish (the "exceptional" part)
 
-- **`snapshot(store)`**: deep-clone to a plain object. Critical for `JSON.stringify`, structural equality testing, time-travel debugging.
-- **Custom devtools formatter**: Chrome supports custom object formatters via `window.devtoolsFormatters`. Ship one so stores render as `Store { user: { ... } }` in the console instead of `Proxy { ... }`. This single thing is what makes Vue's stores feel "polished" and Valtio's feel "raw."
-- **Dev-mode warnings**: `process.env.NODE_ENV !== 'production'` checks that warn on common footguns (mutating during render, replacing a store root, holding a stale proxy reference after `dispose`). Stripped in production builds.
-- **Stable diagnostic names**: `store({...}, { name: 'app' })` (optional) used in dev warnings and devtools labels.
-- **`onCleanup`-style scoping**: stores created inside `effect`/`computed` auto-dispose when the owning scope tears down. Matches Solid's ownership model.
+### `snapshot(store)`
 
-**Acceptance:** Stores render legibly in Chrome devtools. Dev-mode warnings fire and are stripped in prod build. `snapshot()` round-trips via `JSON.stringify`.
+Deep-clone to a plain object. Critical for `JSON.stringify`, structural equality testing, time-travel debugging. Pattern follows [Valtio `vanilla.ts:78-120`](../../.research/valtio/src/vanilla.ts) but **without** Valtio's snap-cache (we don't need React's render-stability guarantee). Walks the raw graph (using `$RAW` symbol), deep-copies plain objects and arrays, returns built-ins by reference. **Does not** register any reactive subscription.
+
+### `subscribe(s, path, callback)`
+
+Path-typed escape hatch ([STORES.md §4.3](STORES.md)). Internally: resolves path → terminal `SignalNode`, registers a non-tracked subscriber, returns unsubscribe. Microtask-batched by default ([Valtio `vanilla.ts:330-341`](../../.research/valtio/src/vanilla.ts) precedent).
+
+### Custom devtools formatter
+
+Vue ships [`runtime-core/src/customFormatter.ts`](../../.research/vue/packages/runtime-core/src/customFormatter.ts) (212 LoC) confirming the `window.devtoolsFormatters` API is alive in 2026. Pattern to copy:
+
+```ts
+export function initStoreDevtoolsFormatter(): void {
+  if (typeof window === "undefined") return;
+  if (process.env.NODE_ENV === "production") return;
+
+  const formatter = {
+    __marjoram_store_formatter: true,
+    header(obj: unknown) {
+      if (!isStore(obj)) return null;
+      return ["div", {}, ["span", { style: "color:#3ba776" }, "Store"]];
+    },
+    hasBody(obj: unknown) { return isStore(obj); },
+    body(obj: unknown) {
+      // CRITICAL: unwrap to render the raw data, not the proxy.
+      // Use untracked() so the formatter doesn't subscribe DevTools to the store.
+      return untracked(() => ["div", {}, ["object", { object: unwrap(obj as Store<object>) }]]);
+    },
+  };
+
+  const w = window as any;
+  if (w.devtoolsFormatters) w.devtoolsFormatters.push(formatter);
+  else w.devtoolsFormatters = [formatter];
+}
+```
+
+Key implementation notes from reading Vue's version:
+- **`untracked()` wrap** any reactive reads inside the formatter. Vue uses `pauseTracking()`/`resetTracking()` ([`customFormatter.ts:40-42`](../../.research/vue/packages/runtime-core/src/customFormatter.ts)); we use the existing `untracked()` primitive.
+- **Production stripping** via Rollup `@rollup/plugin-replace` substituting `process.env.NODE_ENV` at build time. Confirm the existing Rollup config does this; add it if not.
+- **No "enable custom formatters" check needed in code** — that's a DevTools setting users toggle.
+- **Firefox/Safari** silently no-op (neither reads `window.devtoolsFormatters`).
+
+Invoked once per process from the public entry: `init` on first `store()` call, guarded by a module-level boolean.
+
+### Build-config precondition (verified 2026-05-22)
+
+Current [rollup.config.js](../rollup.config.js) does **not** include `@rollup/plugin-replace`. Without it, `process.env.NODE_ENV` is left as the literal expression at runtime (in the browser, where `process` is undefined, the dev branches throw). Phase 5 must add `@rollup/plugin-replace` as a dev dependency and configure it to substitute `process.env.NODE_ENV` with `'production'` in the published builds (and `'development'` in the dev build). This is the single new dev-dependency added by the whole initiative; covered in the Phase 5 PR description.
+
+### Dev-mode warnings
+
+`process.env.NODE_ENV !== "production"` checks for:
+- Mutating during a `computed` body (use `effect` for side effects).
+- Setting a property to its current value (no-op; usually a code smell).
+- `unwrap(s)` + mutation pattern (silently bypasses reactivity).
+- Replacing a store root via assignment (`Object.assign(state, newState)` instead).
+
+All stripped in production via the Rollup replace.
+
+### Stable diagnostic names
+
+`store({...}, { name: "app" })`. Stored in the `$NODE` record as a non-enumerable label. Shown in devtools formatter header and dev-mode warnings.
+
+### Ownership
+
+Stores created inside an `effect`/`computed` body inherit that scope's owner; when the scope tears down, the store's `$NODE` map is cleared and per-path subscribers are notified of disposal. This is symmetric with existing `signal()` cleanup. No new API — the existing `effect()` return value (a disposer) covers it.
+
+### Acceptance
+
+- Stores render as `Store { ... }` in Chrome DevTools with custom formatters enabled.
+- Reading a store inside the devtools formatter does **not** subscribe the formatter to changes (verified with an instrumented `effect`).
+- Production build (`npm run build`) contains no string `__marjoram_store_formatter` (formatter stripped by Rollup replace).
+- `snapshot(s)` round-trips via `JSON.stringify`/`JSON.parse` and produces structurally equal output to the source (test fixture).
+- `subscribe(s, "user.name", cb)` is a TypeScript error if `user.name` doesn't exist on `T`.
 
 ## Phase 6 — Test suite
 
