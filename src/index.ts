@@ -1,5 +1,7 @@
 export * from "./view";
 export { html } from "./view";
+export { repeat } from "./view/external/repeat";
+export { when } from "./view/external/when";
 
 export * from "./useViewModel";
 export { useViewModel } from "./useViewModel";
