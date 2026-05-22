@@ -18,7 +18,7 @@ Build self-contained widgets — chat launchers, cookie banners, feedback forms,
 ## Table of Contents
 
 - [🚀 Quick Start](#quick-start) - Build and mount a widget in 30 seconds
-- [📖 API Reference](#api-reference) - `createWidget`, `html`, `useViewModel`, `when`
+- [📖 API Reference](#api-reference) - `createWidget`, `html`, `useViewModel`, `repeat`, `when`
 - [💡 Examples](#examples) - Todo app, forms, data fetching
 - [🎯 TypeScript Support](#typescript-support) - Type safety and IntelliSense  
 - [🧬 Reactivity](#reactivity) - Signals, computed, and effects
@@ -301,6 +301,56 @@ const view = html`<p>${viewModel.message}</p>`;
 // ✅ Correct - no $ prefix for getting/setting values
 viewModel.message = 'Updated!'; // DOM updates automatically
 ```
+
+### `repeat` — Keyed List Reconciliation
+
+Efficiently renders a reactive list with DOM reuse. Items with the same key keep their existing DOM nodes across updates — only added, removed, or reordered items touch the DOM. Prefer `repeat` over `.compute(items => items.map(...))` whenever the list can change after initial render.
+
+```typescript
+function repeat<T>(
+  items: ReactiveArrayProp<T> | T[],
+  keyFn: (item: T, index: number) => unknown,
+  templateFn: (item: T, index: number) => Node
+): Node
+```
+
+**Parameters:**
+- `items` — a reactive array prop (e.g. `vm.$todos`) or a static array.
+- `keyFn` — extracts a stable, unique key for each item. Typically an `id`. Using the array index as the key defeats reconciliation and should be avoided when items can be added, removed, or reordered.
+- `templateFn` — returns a DOM node for each item, typically via `` html`...` ``.
+
+```typescript
+import { html, useViewModel, repeat } from 'marjoram';
+
+const vm = useViewModel({
+  todos: [
+    { id: 1, text: 'Buy milk', done: false },
+    { id: 2, text: 'Walk the dog', done: true },
+  ],
+});
+
+const view = html`
+  <ul>
+    ${repeat(
+      vm.$todos,
+      todo => todo.id,
+      todo => html`<li class="${todo.done ? 'done' : ''}">${todo.text}</li>`
+    )}
+  </ul>
+`;
+
+view.mount('#app');
+
+// Granular updates — only the added <li> is created; existing nodes are reused.
+vm.todos = [...vm.todos, { id: 3, text: 'Write docs', done: false }];
+```
+
+**When to use which:**
+
+| Use | For |
+|---|---|
+| `repeat(vm.$items, keyFn, tplFn)` | Lists that change over time — reorders, additions, removals, in-place edits |
+| `vm.$items.compute(items => items.map(tplFn))` | Static lists, or lists where re-rendering every item on any change is acceptable |
 
 ### Computed Properties
 
