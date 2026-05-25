@@ -3,6 +3,7 @@ import { Schema, SchemaPropValue } from "../schema/types";
 import {
   computed as signalComputed,
   effect as signalEffect,
+  isStore,
   type ReadonlySignal,
 } from "../reactivity";
 
@@ -194,6 +195,10 @@ export const useViewModel = function <TModel extends Model>(
       // enabling fine-grained dependency tracking in computed properties.
       if (isSchemaProp) {
         const value = Reflect.get(prop, "value");
+        // Stores manage their own reactivity — don't wrap them in the
+        // SchemaProp-observer array mutation proxy or the recursive object
+        // proxy below. The store's own proxy traps handle granular tracking.
+        if (isStore(value)) return value;
         if (Array.isArray(value)) {
           return createArrayMutationProxy(value, prop as SchemaProp);
         }
@@ -203,6 +208,9 @@ export const useViewModel = function <TModel extends Model>(
       // First-time access: value was just wrapped in SchemaProp above.
       // Read through schemaProp.value so signal dependency tracking works.
       const currentValue = schemaProp.value;
+
+      // Stores: return as-is so the store's proxy handles all reactivity.
+      if (isStore(currentValue)) return currentValue;
 
       // If the value is an array, wrap it in a mutation proxy
       if (Array.isArray(currentValue)) {
