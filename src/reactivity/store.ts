@@ -17,6 +17,8 @@ import {
   _track,
   _notify,
   batch,
+  effect as signalEffect,
+  untracked,
 } from "./signal";
 
 // ---------------------------------------------------------------------------
@@ -348,4 +350,180 @@ export function unwrap<T extends object>(value: Store<T> | T): T {
     return (value as unknown as Record<symbol, unknown>)[$RAW] as T;
   }
   return value as T;
+}
+
+// ---------------------------------------------------------------------------
+// snapshot() — deep plain-object copy
+// ---------------------------------------------------------------------------
+
+/**
+ * Deep-clone a store to a plain object. Returned value is structurally `T`,
+ * contains no reactivity, and is safe to `JSON.stringify`, structurally
+ * compare, or hand to non-reactive code.
+ *
+ * Reading via `snapshot()` does **not** register reactive subscriptions —
+ * it's a non-tracking deep read suitable for use outside reactive contexts.
+ * If you call it inside an `effect`, the effect will not re-run on store
+ * mutations.
+ *
+ * Built-in values (Date, Map, Set, RegExp, class instances, etc.) are
+ * returned by reference — only plain objects and arrays are deep-copied.
+ *
+ * @example
+ * ```ts
+ * const state = store({ user: { name: "Alice" }, todos: [1, 2, 3] });
+ * const json = JSON.stringify(snapshot(state));
+ * ```
+ */
+export function snapshot<T extends object>(s: Store<T>): T {
+  // Walk through the proxy so cycles + nested stores resolve correctly, but
+  // wrap in `untracked()` so the user-facing contract holds: snapshot() never
+  // registers reactive subscriptions, even when called inside an effect.
+  return untracked(() => cloneDeep(s, new WeakMap())) as T;
+}
+
+function cloneDeep(value: unknown, seen: WeakMap<object, object>): unknown {
+  if (value === null || typeof value !== "object") return value;
+  if (!shouldProxy(value)) return value; // pass built-ins/markRaw by reference
+  const existing = seen.get(value);
+  if (existing) return existing; // cycle
+  if (Array.isArray(value)) {
+    const out: unknown[] = [];
+    seen.set(value, out);
+    for (let i = 0; i < value.length; i++) {
+      out[i] = cloneDeep(value[i], seen);
+    }
+    return out;
+  }
+  const out: Record<string, unknown> = {};
+  seen.set(value, out);
+  for (const k of Object.keys(value)) {
+    out[k] = cloneDeep((value as Record<string, unknown>)[k], seen);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Path<T> / PathValue<T, P> — typed dotted-string paths
+//
+// Pattern from STORE_RESEARCH_FINDINGS.md §8 (type-fest / react-hook-form
+// heritage). Depth-capped recursion via tuple-length decrement; pure type-level,
+// zero runtime cost.
+// ---------------------------------------------------------------------------
+
+type PathPrimitive =
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | null
+  | undefined;
+// Treat these as path leaves — don't recurse into them.
+type PathLeafObject =
+  | Date
+  | RegExp
+  | Map<unknown, unknown>
+  | Set<unknown>
+  | Promise<unknown>
+  | ((...args: unknown[]) => unknown);
+type PathBuiltin = PathPrimitive | PathLeafObject;
+type PrevDepth = [never, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+/** Union of all dotted paths through T, depth-capped (default 10). */
+export type Path<T, D extends number = 10> = [D] extends [never]
+  ? never
+  : T extends PathBuiltin
+    ? never
+    : T extends ReadonlyArray<infer U>
+      ? `${number}` | `${number}.${Path<U, PrevDepth[D]>}`
+      : T extends object
+        ? {
+            [K in keyof T & (string | number)]: T[K] extends PathBuiltin
+              ? `${K}`
+              : `${K}` | `${K}.${Path<NonNullable<T[K]>, PrevDepth[D]>}`;
+          }[keyof T & (string | number)]
+        : never;
+
+/** Value type at path P within T. Propagates `| undefined` if any segment is optional. */
+export type PathValue<T, P extends string> = P extends `${infer K}.${infer R}`
+  ? K extends keyof NonNullable<T>
+    ?
+        | PathValue<NonNullable<T>[K], R>
+        | (undefined extends T ? undefined : never)
+    : NonNullable<T> extends ReadonlyArray<infer U>
+      ? PathValue<U, R> | (undefined extends T ? undefined : never)
+      : never
+  : P extends keyof NonNullable<T>
+    ? NonNullable<T>[P] | (undefined extends T ? undefined : never)
+    : NonNullable<T> extends ReadonlyArray<infer U>
+      ? U | (undefined extends T ? undefined : never)
+      : never;
+
+// ---------------------------------------------------------------------------
+// subscribe() — typed-path escape hatch
+// ---------------------------------------------------------------------------
+
+/**
+ * Subscribe to changes at a typed dotted path within a store. Prefer
+ * `effect()` for almost everything — `subscribe()` exists for interop with
+ * non-reactive code (DOM event sinks, third-party libraries that take
+ * callbacks).
+ *
+ * Pass `""` as the path to subscribe to any change anywhere in the store —
+ * callback receives the whole-store value (as a snapshot). For finer-grained
+ * whole-store work, write an `effect()` instead.
+ *
+ * Returns an unsubscribe function. Always call it during cleanup to avoid
+ * leaking the underlying signal effect.
+ *
+ * @example
+ * ```ts
+ * const state = store({ user: { name: "Alice" } });
+ * const off = subscribe(state, "user.name", (next, prev) => {
+ *   console.log("name changed:", prev, "→", next);
+ * });
+ * state.user.name = "Bob"; // logs "name changed: Alice → Bob"
+ * off();
+ * ```
+ */
+export function subscribe<T extends object, P extends Path<T> | "">(
+  s: Store<T>,
+  path: P,
+  callback: P extends ""
+    ? (newValue: T, oldValue: T) => void
+    : (newValue: PathValue<T, P>, oldValue: PathValue<T, P>) => void
+): () => void {
+  let prev: unknown;
+  let initialized = false;
+
+  return signalEffect(() => {
+    let cur: unknown;
+    if (path === "") {
+      // Whole-store subscription: deep-walk through the proxy so every
+      // accessed path registers as a dependency of this effect. Return a
+      // snapshot-shaped value to the callback. (We deliberately do NOT use
+      // snapshot() here because its public contract is "no tracking" via
+      // untracked() — which is exactly what we want to opt OUT of.)
+      cur = cloneDeep(s, new WeakMap());
+    } else {
+      cur = readPath(s, path as string);
+    }
+    if (initialized) {
+      (callback as (newVal: unknown, oldVal: unknown) => void)(cur, prev);
+    }
+    prev = cur;
+    initialized = true;
+  });
+}
+
+function readPath(s: object, path: string): unknown {
+  if (!path) return s;
+  const parts = path.split(".");
+  let cur: unknown = s;
+  for (const p of parts) {
+    if (cur === null || cur === undefined) return undefined;
+    cur = (cur as Record<string, unknown>)[p];
+  }
+  return cur;
 }
