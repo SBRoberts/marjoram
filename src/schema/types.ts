@@ -39,10 +39,47 @@ export type SchemaArrayProp<T> = SchemaProp &
     value: T[];
   };
 
-// Conditional type that provides array methods for array values, plain SchemaProp otherwise
-export type TypedSchemaProp<T> = T extends readonly unknown[]
-  ? SchemaArrayProp<T[number]>
-  : SchemaProp;
+// Path-binding type for stores: mirrors the store's data shape on top of
+// SchemaProp so `vm.$user.address.city` is typed as the leaf TypedSchemaProp.
+// Each level is a SchemaProp (so SchemaProp methods like .value/.compute work),
+// intersected with a dictionary of typed child accesses for traversal.
+//
+// The runtime is implemented in src/useViewModel/storePathBinding.ts.
+export type StorePathBinding<T> = SchemaProp & {
+  [K in keyof T]-?: T[K] extends
+    | Date
+    | RegExp
+    | Map<unknown, unknown>
+    | Set<unknown>
+    | Promise<unknown>
+    | ((...args: unknown[]) => unknown)
+    ? SchemaProp
+    : T[K] extends readonly unknown[]
+      ? SchemaArrayProp<T[K][number]>
+      : T[K] extends object
+        ? StorePathBinding<T[K]>
+        : SchemaProp;
+};
+
+// Conditional type: arrays get array-prop, stores get path-binding, otherwise
+// plain SchemaProp.
+//
+// Store detection: the Store<T> brand from src/reactivity/store.ts is a
+// `unique symbol`, which is private to that module. We can't import the
+// symbol itself, but `T extends Store<infer U>` works because Store<U> = U &
+// { [BRAND]: true } — only matches values carrying that brand.
+//
+// Import-cycle note: schema → reactivity is already established by the
+// signal import; this adds a type-only re-import which doesn't introduce a
+// new dependency direction.
+import type { Store } from "../reactivity";
+
+export type TypedSchemaProp<T> =
+  T extends Store<infer U>
+    ? StorePathBinding<U>
+    : T extends readonly unknown[]
+      ? SchemaArrayProp<T[number]>
+      : SchemaProp;
 
 // Schema interface with typed property methods
 interface SchemaMethods {
