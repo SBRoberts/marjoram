@@ -8,6 +8,7 @@ import {
 } from "../reactivity";
 
 import { ViewModel, Model } from "./types";
+import { createStorePathBinding } from "./storePathBinding";
 
 const MUTATING_ARRAY_METHODS = new Set([
   "push",
@@ -187,7 +188,19 @@ export const useViewModel = function <TModel extends Model>(
 
       // To access a property in construction mode is to access the schema property. We are
       // certain the schemaProp exists in both our model and schema, so we can return it.
-      if (isConstructing) return schemaProp;
+      //
+      // Store-aware path-binding (Phase 4b): when the underlying value is a
+      // store, wrap the SchemaProp in a path-binding proxy so that
+      // `vm.$user.name` (and arbitrarily deeper) returns a SchemaProp
+      // reactive to that specific path. The proxy still passes
+      // `instanceof SchemaProp` so html templates accept it as-is.
+      if (isConstructing) {
+        const underlying = schemaProp.value;
+        if (isStore(underlying)) {
+          return createStorePathBinding(schemaProp as SchemaProp);
+        }
+        return schemaProp;
+      }
 
       // The accessed property has been reassigned as a schema property.
       // The user is requesting the value, so we return it instead.
