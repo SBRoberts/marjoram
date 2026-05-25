@@ -1,5 +1,6 @@
 import { SchemaProp } from "../../schema";
 import { SchemaPropValue } from "../../schema/types";
+import { effect as signalEffect, isStore } from "../../reactivity";
 
 /**
  * Minimal structural interface for what `repeat()` needs from a SchemaProp.
@@ -124,14 +125,41 @@ export const repeat = <T>(
     keyMap = newKeyMap;
   }
 
-  // Initial render
-  reconcile(initialItems);
+  if (Array.isArray(items)) {
+    // Static array — render once, no subscription.
+    reconcile(items);
+  } else {
+    const initialValue = items.value;
 
-  // Subscribe to reactive updates if items is a SchemaProp
-  if (!Array.isArray(items)) {
-    items.observe((newValue: SchemaPropValue) => {
-      reconcile(Array.isArray(newValue) ? (newValue as T[]) : []);
-    });
+    if (Array.isArray(initialValue) && isStore(initialValue)) {
+      // Store array (Phase 4c). Inner mutations (push/pop/index assignment)
+      // don't replace the array reference, so the SchemaProp's observer chain
+      // won't fire on them — its underlying signal value (the store proxy)
+      // is unchanged by reference. Subscribe directly to the store's path-level
+      // notifications via a signal effect: reading the array's length and
+      // iterating its elements registers the effect as a subscriber to the
+      // length sentinel and every current index.
+      //
+      // NOTE: this effect is currently not disposed when the view unmounts.
+      // Container-level lifecycle hooks are tracked for Phase 5 polish.
+      signalEffect(() => {
+        const arr = items.value;
+        if (Array.isArray(arr)) {
+          // Force per-index + length subscriptions so any in-place mutation
+          // triggers reconciliation.
+          arr.forEach(() => {
+            /* dependency-tracking side effect */
+          });
+        }
+        reconcile(Array.isArray(arr) ? (arr as T[]) : []);
+      });
+    } else {
+      // Plain SchemaProp array — existing observe-based subscription.
+      reconcile(initialItems);
+      items.observe((newValue: SchemaPropValue) => {
+        reconcile(Array.isArray(newValue) ? (newValue as T[]) : []);
+      });
+    }
   }
 
   return container;
