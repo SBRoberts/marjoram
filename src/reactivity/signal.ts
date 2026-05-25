@@ -44,7 +44,8 @@ interface Subscriber {
   _running: boolean;
 }
 
-interface SignalNode<T = unknown> {
+/** @internal */
+export interface SignalNode<T = unknown> {
   _value: T;
   _subscribers: Set<Subscriber>;
 }
@@ -277,4 +278,36 @@ export function untracked<T>(fn: () => T): T {
   } finally {
     activeSubscriber = prev;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Internal building blocks for store() (Phase 2 of the deep-reactivity work).
+//
+// These are NOT public API — they're not re-exported from src/index.ts and are
+// marked @internal. The store implementation in ./store.ts uses them to
+// register and notify per-path signal nodes without duplicating the
+// subscriber-tracking machinery above.
+// ---------------------------------------------------------------------------
+
+/** @internal Whether the read happens inside a tracked context (computed/effect/etc). */
+export function _isTracking(): boolean {
+  return activeSubscriber !== null;
+}
+
+/** @internal Create a fresh node. The `_value` is unused by stores (raw[key] is the source of truth) but kept consistent with signal() shape. */
+export function _createNode<T>(value: T): SignalNode<T> {
+  return { _value: value, _subscribers: new Set() };
+}
+
+/** @internal Register the active subscriber (if any) as a dependent of this node. */
+export function _track(node: SignalNode): void {
+  if (activeSubscriber) {
+    node._subscribers.add(activeSubscriber);
+    activeSubscriber._sources.add(node);
+  }
+}
+
+/** @internal Notify subscribers, respecting the existing batch. */
+export function _notify(node: SignalNode): void {
+  notifySubscribers(node);
 }
