@@ -16,6 +16,7 @@ import {
   _createNode,
   _track,
   _notify,
+  batch,
 } from "./signal";
 
 // ---------------------------------------------------------------------------
@@ -160,6 +161,36 @@ const storeHandler: ProxyHandler<object> = {
 
     const value = Reflect.get(raw, key, receiver);
 
+    // Array-method batching (Phase 3): when reading a function-typed key off
+    // an array that exists on Array.prototype, return a wrapper that runs the
+    // method inside `batch()`. This coalesces the internal index/length
+    // writes of mutating methods (push/pop/shift/unshift/splice/sort/reverse/
+    // fill/copyWithin) into a single notification round, so a subscribed
+    // effect re-runs once per call instead of once per inner write.
+    //
+    // Pattern: Solid `packages/solid/store/src/mutable.ts:55-58`.
+    //
+    // Non-mutating methods (map/filter/forEach/...) also flow through this
+    // path. The batch is a no-op for them — no extra work, no behavior
+    // change.
+    if (
+      Array.isArray(raw) &&
+      typeof value === "function" &&
+      typeof key === "string" &&
+      key in Array.prototype
+    ) {
+      return (...args: unknown[]): unknown => {
+        let result: unknown;
+        batch(() => {
+          result = (value as (...a: unknown[]) => unknown).apply(
+            receiver,
+            args
+          );
+        });
+        return result;
+      };
+    }
+
     // Don't track reads of private symbols, function values, or inherited
     // accessors that aren't part of the user's data model.
     if (typeof key !== "symbol") {
@@ -176,12 +207,26 @@ const storeHandler: ProxyHandler<object> = {
     const oldValue = Reflect.get(raw, key, receiver);
     if (Object.is(oldValue, newValue)) return true;
 
+    const isArray = Array.isArray(raw);
+    // Capture length before the write — writing an out-of-bounds index on an
+    // array auto-bumps `length` as a native side-effect. We need to notify
+    // length subscribers from inside this set, because by the time push()
+    // explicitly writes `this.length = N` (its final step), the value is
+    // already N and Object.is would skip the notification.
+    const oldLength = isArray ? (raw as unknown[]).length : 0;
+
     const isNewKey = !(key in raw);
     const ok = Reflect.set(raw, key, newValue, receiver);
     if (!ok) return false;
 
     notifyPath(raw, key);
     if (isNewKey) notifyKeys(raw);
+
+    if (isArray && key !== "length") {
+      const newLength = (raw as unknown[]).length;
+      if (newLength !== oldLength) notifyPath(raw, "length");
+    }
+
     return true;
   },
 
