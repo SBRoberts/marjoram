@@ -4,7 +4,13 @@ import {
   SchemaPropNotify,
   SchemaPropExpression,
 } from "./types";
-import { signal, type Signal } from "../reactivity";
+import {
+  signal,
+  computed as signalComputed,
+  effect as signalEffect,
+  isStore,
+  type Signal,
+} from "../reactivity";
 
 export class SchemaProp {
   // Public
@@ -18,6 +24,8 @@ export class SchemaProp {
   #pendingValue?: SchemaPropValue;
   #signal: Signal;
   #schema: Schema;
+  /** Disposers for computed→SchemaProp bridges created by store-aware compute(). */
+  #computeBridgeDisposers: (() => void)[] = [];
 
   constructor(schema: Schema, key: string, value: unknown) {
     this.key = key;
@@ -164,11 +172,44 @@ export class SchemaProp {
    * @returns A new SchemaProp containing the computed result
    */
   compute(expression: SchemaPropExpression) {
+    // Store-aware bridging: when `this.value` is a store, its inner mutations
+    // don't fire the SchemaProp's observer chain — the store has its own
+    // path-level subscription system. Wrap the expression in a real
+    // `computed()` so it auto-tracks whatever store paths the expression
+    // touches, then bridge the computed back to the derived SchemaProp.
+    //
+    // Critically: do NOT set `schemaProp.#expression` in this path. update()
+    // would re-apply the expression to the already-computed value, breaking
+    // the derivation. The expression is captured in the computed's closure.
+    if (isStore(this.value)) {
+      const computedSig = signalComputed(() =>
+        expression(this.#signal.peek() as SchemaPropValue)
+      );
+      // signalComputed eagerly evaluates its fn once on creation to register
+      // dependencies. .peek() returns that cached value without re-running.
+      const initial = computedSig.peek() as SchemaPropValue;
+      const schemaProp = this.#schema.defineProperty(initial);
+
+      let initialized = false;
+      const dispose = signalEffect(() => {
+        const newValue = computedSig();
+        if (initialized) {
+          schemaProp.update(newValue as SchemaPropValue);
+        }
+        initialized = true;
+      });
+      this.#computeBridgeDisposers.push(() => {
+        dispose();
+        computedSig.dispose();
+      });
+
+      return schemaProp;
+    }
+
+    // Non-store path: the original observer-chained derivation.
     const schemaProp = this.#schema.defineProperty(expression(this.value));
     schemaProp.#expression = expression;
-
     this.observe(schemaProp.update, schemaProp);
-
     return schemaProp;
   }
 
@@ -177,6 +218,8 @@ export class SchemaProp {
    * Called automatically by `view.unmount()` and `vm.$destroy()`.
    */
   dispose(): void {
+    for (const d of this.#computeBridgeDisposers) d();
+    this.#computeBridgeDisposers = [];
     this.#observers = [];
     this.#pendingUpdate = false;
     this.#pendingValue = undefined;
