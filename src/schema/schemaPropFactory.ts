@@ -26,6 +26,8 @@ export class SchemaProp {
   #schema: Schema;
   /** Disposers for computed→SchemaProp bridges created by store-aware compute(). */
   #computeBridgeDisposers: (() => void)[] = [];
+  /** Disposers registered externally via addDisposer() — e.g. by repeat() when it sets up a store-array signal effect. Run in dispose() so the effect tears down when the owning SchemaProp / schema disposes. */
+  #externalDisposers: (() => void)[] = [];
 
   constructor(schema: Schema, key: string, value: unknown) {
     this.key = key;
@@ -217,7 +219,19 @@ export class SchemaProp {
    * Clears all observers, signal subscribers, and pending state, releasing memory.
    * Called automatically by `view.unmount()` and `vm.$destroy()`.
    */
+  /**
+   * Register a function to be called when this SchemaProp is disposed.
+   * Used by higher-level helpers (e.g. `repeat()`) to tie an internal
+   * signal effect's lifecycle to the SchemaProp / owning schema so the
+   * effect tears down on `view.unmount()` or `vm.$destroy()`.
+   */
+  addDisposer(fn: () => void): void {
+    this.#externalDisposers.push(fn);
+  }
+
   dispose(): void {
+    for (const d of this.#externalDisposers) d();
+    this.#externalDisposers = [];
     for (const d of this.#computeBridgeDisposers) d();
     this.#computeBridgeDisposers = [];
     this.#observers = [];

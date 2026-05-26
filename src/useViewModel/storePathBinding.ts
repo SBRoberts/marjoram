@@ -36,6 +36,7 @@ const SCHEMA_PROP_KEYS = new Set<string | symbol>([
   "observe",
   "update",
   "dispose",
+  "addDisposer",
   // Array passthrough getters on SchemaProp
   "map",
   "filter",

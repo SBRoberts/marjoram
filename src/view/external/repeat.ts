@@ -139,10 +139,7 @@ export const repeat = <T>(
       // notifications via a signal effect: reading the array's length and
       // iterating its elements registers the effect as a subscriber to the
       // length sentinel and every current index.
-      //
-      // NOTE: this effect is currently not disposed when the view unmounts.
-      // Container-level lifecycle hooks are tracked for Phase 5 polish.
-      signalEffect(() => {
+      const disposeEffect = signalEffect(() => {
         const arr = items.value;
         if (Array.isArray(arr)) {
           // Force per-index + length subscriptions so any in-place mutation
@@ -153,6 +150,15 @@ export const repeat = <T>(
         }
         reconcile(Array.isArray(arr) ? (arr as T[]) : []);
       });
+      // Tie the effect's lifecycle to the items SchemaProp so view.unmount()
+      // (which calls schema.dispose() → each SchemaProp.dispose()) tears
+      // down the effect and stops the leak from Phase 4c.
+      const itemsWithDisposer = items as {
+        addDisposer?: (fn: () => void) => void;
+      };
+      if (typeof itemsWithDisposer.addDisposer === "function") {
+        itemsWithDisposer.addDisposer(disposeEffect);
+      }
     } else {
       // Plain SchemaProp array — existing observe-based subscription.
       reconcile(initialItems);
