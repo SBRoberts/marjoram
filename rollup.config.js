@@ -1,6 +1,7 @@
 import resolve from "@rollup/plugin-node-resolve";
 import commonjs from "@rollup/plugin-commonjs";
 import typescript from "@rollup/plugin-typescript";
+import replace from "@rollup/plugin-replace";
 import { terser } from "rollup-plugin-terser";
 import { readFileSync } from "fs";
 
@@ -25,6 +26,15 @@ export default [
     },
     external,
     plugins: [
+      // Substitute build-time constants BEFORE compilation so Terser can
+      // dead-code-eliminate dev-only branches (devtools formatter,
+      // dev-mode warnings, etc.) from the production bundle.
+      replace({
+        preventAssignment: true,
+        values: {
+          "process.env.NODE_ENV": JSON.stringify("production"),
+        },
+      }),
       resolve({
         browser: true,
         preferBuiltins: false,
@@ -48,6 +58,12 @@ export default [
     input: "./src/index.ts",
     external,
     plugins: [
+      replace({
+        preventAssignment: true,
+        values: {
+          "process.env.NODE_ENV": JSON.stringify("production"),
+        },
+      }),
       resolve(),
       typescript({
         tsconfig: "./tsconfig.build.json",
