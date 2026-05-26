@@ -69,6 +69,7 @@
     "@emotion/css": "^11.11.2",
     "@rollup/plugin-commonjs": "^22.0.0",
     "@rollup/plugin-node-resolve": "^13.3.0",
+    "@rollup/plugin-replace": "^6.0.3",
     "@rollup/plugin-typescript": "^8.5.0",
     "@testing-library/dom": "^9.3.4",
     "@testing-library/jest-dom": "^6.9.1",

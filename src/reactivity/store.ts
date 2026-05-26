@@ -294,6 +294,11 @@ function wrap<T extends object>(raw: T): T {
  * ```
  */
 export function store<T extends object>(initial: T): Store<T> {
+  // Lazy one-time install of the DevTools custom formatter. In production
+  // builds the `process.env.NODE_ENV === "production"` check inlined below
+  // short-circuits, and Terser dead-code-eliminates the entire formatter
+  // body via the @rollup/plugin-replace substitution.
+  installDevtoolsFormatter();
   // Already a store — return as-is (idempotent, handles cycles).
   if ((initial as Record<PropertyKey, unknown>)[FLAG_IS_STORE] === true) {
     return initial as Store<T>;
@@ -303,6 +308,58 @@ export function store<T extends object>(initial: T): Store<T> {
     return initial as Store<T>;
   }
   return wrap(initial) as Store<T>;
+}
+
+// ---------------------------------------------------------------------------
+// DevTools custom formatter — dev-only, stripped from production builds.
+//
+// Without this, stores render as opaque `Proxy { ... }` blobs in the console.
+// With it: `Store { user: { name: "Alice" } }` with inspectable nested data.
+//
+// The whole block is gated behind `process.env.NODE_ENV !== "production"`.
+// The Rollup build substitutes `process.env.NODE_ENV` to the string
+// "production" at compile time so Terser drops the entire body.
+//
+// Pattern: Vue 3's `runtime-core/src/customFormatter.ts`. Users must enable
+// "Custom formatters" in DevTools preferences for this to render. Firefox /
+// Safari ignore `window.devtoolsFormatters` — harmless no-op.
+// ---------------------------------------------------------------------------
+
+let formatterInstalled = false;
+
+function installDevtoolsFormatter(): void {
+  if (process.env.NODE_ENV === "production") return;
+  if (formatterInstalled) return;
+  if (typeof window === "undefined") return;
+  formatterInstalled = true;
+
+  const labelStyle = { style: "color:#3ba776;font-weight:bold" };
+
+  const formatter = {
+    __marjoram_store_formatter: true,
+    header(obj: unknown) {
+      if (!isStore(obj)) return null;
+      return ["div", {}, ["span", labelStyle, "Store"]];
+    },
+    hasBody(obj: unknown) {
+      return isStore(obj);
+    },
+    body(obj: unknown) {
+      return untracked(() => [
+        "div",
+        {},
+        ["object", { object: unwrap(obj as Store<object>) }],
+      ]);
+    },
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any;
+  if (w.devtoolsFormatters) {
+    w.devtoolsFormatters.push(formatter);
+  } else {
+    w.devtoolsFormatters = [formatter];
+  }
 }
 
 /**
