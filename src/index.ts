@@ -12,5 +12,12 @@ export { createWidget } from "./widget/createWidget";
 export { signal, computed, effect, batch, untracked } from "./reactivity";
 export type { Signal, ReadonlySignal } from "./reactivity";
 
-export { store, markRaw, isStore, unwrap } from "./reactivity";
-export type { Store } from "./reactivity";
+export {
+  store,
+  markRaw,
+  isStore,
+  unwrap,
+  snapshot,
+  subscribe,
+} from "./reactivity";
+export type { Store, Path, PathValue } from "./reactivity";
