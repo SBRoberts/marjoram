@@ -199,6 +199,18 @@ const storeHandler: ProxyHandler<object> = {
       trackPath(raw, key);
     }
 
+    // Pass-through for existing stores: store({ child: store({...}) }) reads
+    // of `parent.child` return the inner proxy unchanged. Without this, wrap()
+    // would try to read $PROXY through the inner store's get trap, recursing
+    // through `shouldProxy → wrap → shouldProxy → ...`.
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      (value as Record<PropertyKey, unknown>)[FLAG_IS_STORE] === true
+    ) {
+      return value;
+    }
+
     if (shouldProxy(value)) {
       return wrap(value);
     }
