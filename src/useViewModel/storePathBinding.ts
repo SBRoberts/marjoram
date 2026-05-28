@@ -86,9 +86,10 @@ function wrap(target: SchemaProp): SchemaProp {
       if (SCHEMA_PROP_KEYS.has(key)) {
         if (process.env.NODE_ENV !== "production") {
           // Dev-mode collision warning: data has a key shadowing a SchemaProp
-          // method. Per the locked decision, method wins. Read raw value
-          // through `t` (not the proxy) so `this.#signal` works.
-          const value = Reflect.get(t, "value", t);
+          // method. Per the locked decision, method wins. Read via peek() so
+          // the dev-only check does NOT register a tracking dependency (which
+          // would mask perf characteristics that don't appear in production).
+          const value = (t as unknown as { peek(): unknown }).peek();
           if (
             value !== null &&
             typeof value === "object" &&
@@ -102,6 +103,12 @@ function wrap(target: SchemaProp): SchemaProp {
         }
         const val = Reflect.get(t, key, t);
         return typeof val === "function" ? val.bind(t) : val;
+      }
+
+      // Prototype-chain guard: `vm.$store.__proto__.x` must not traverse into
+      // Object.prototype. Return undefined for dangerous keys.
+      if (key === "__proto__" || key === "constructor" || key === "prototype") {
+        return undefined;
       }
 
       // Child path binding. Each child is a SchemaProp produced via .compute()
