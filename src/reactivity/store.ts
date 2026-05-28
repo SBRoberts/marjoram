@@ -162,6 +162,21 @@ function notifyKeys(raw: object): void {
   if (node) _notify(node);
 }
 
+/**
+ * Drop a path's SignalNode from the map. Call AFTER notifyPath so any pending
+ * subscribers have already been scheduled — they re-run and re-subscribe to a
+ * fresh node, and this orphaned node GCs. Prevents unbounded growth of the
+ * $NODE map for stores with churning keys (caches, dynamic maps).
+ *
+ * For replaced object subtrees no explicit drop is needed: the old raw object
+ * carries its own $NODE via a symbol property, so the whole subtree's metadata
+ * GCs together with the unreachable old object.
+ */
+function dropNode(raw: object, key: PropertyKey): void {
+  const nodes = (raw as Record<symbol, unknown>)[$NODE] as NodeMap | undefined;
+  if (nodes && key in nodes) delete nodes[key];
+}
+
 // ---------------------------------------------------------------------------
 // The proxy handler. One instance, shared by every store. The handler is
 // stateless — all per-store state lives on the raw object via the private
@@ -263,9 +278,27 @@ const storeHandler: ProxyHandler<object> = {
     notifyPath(raw, key);
     if (isNewKey) notifyKeys(raw);
 
-    if (isArray && key !== "length") {
-      const newLength = (raw as unknown[]).length;
-      if (newLength !== oldLength) notifyPath(raw, "length");
+    if (isArray) {
+      if (key === "length") {
+        // Direct `arr.length = N`. If the array shrank, every index in
+        // [N, oldLength) was removed — fire their subscribers so effects
+        // reading those cells re-run, plus iteration subscribers.
+        const newLen = (raw as unknown[]).length;
+        if (newLen < oldLength) {
+          for (let i = newLen; i < oldLength; i++) {
+            notifyPath(raw, String(i));
+            dropNode(raw, String(i)); // removed index — GC its node
+          }
+          notifyKeys(raw);
+        } else if (newLen > oldLength) {
+          // Grew: new (empty) slots appeared — iteration changed.
+          notifyKeys(raw);
+        }
+      } else {
+        // Index write that auto-bumped length (e.g. arr[arr.length] = x).
+        const newLength = (raw as unknown[]).length;
+        if (newLength !== oldLength) notifyPath(raw, "length");
+      }
     }
 
     return true;
@@ -277,6 +310,8 @@ const storeHandler: ProxyHandler<object> = {
     if (!ok) return false;
     notifyPath(raw, key);
     notifyKeys(raw);
+    // GC the deleted key's node (after notify scheduled its subscribers).
+    dropNode(raw, key);
     return true;
   },
 
@@ -544,7 +579,9 @@ export type Path<T, D extends number = 10> = [D] extends [never]
   : T extends PathBuiltin
     ? never
     : T extends ReadonlyArray<infer U>
-      ? `${number}` | `${number}.${Path<U, PrevDepth[D]>}`
+      ? // "length" is a subscribable path on store arrays (docs §5.2), plus
+        // numeric-index paths and deeper paths under each element.
+        "length" | `${number}` | `${number}.${Path<U, PrevDepth[D]>}`
       : T extends object
         ? {
             [K in keyof T & (string | number)]: T[K] extends PathBuiltin

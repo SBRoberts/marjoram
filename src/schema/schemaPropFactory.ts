@@ -185,7 +185,16 @@ export class SchemaProp {
     // the derivation. The expression is captured in the computed's closure.
     if (isStore(this.value)) {
       const computedSig = signalComputed(() =>
-        expression(this.#signal.peek() as SchemaPropValue)
+        // Tracking read (this.#signal(), NOT .peek()). Two reasons it must
+        // track:
+        //   1. The store paths the expression reads are tracked through the
+        //      store's own get-trap (granular updates).
+        //   2. The SchemaProp's OWN signal must be tracked too, so that
+        //      replacing the whole store value (vm.x = newStore →
+        //      prop.update → #signal.set) re-runs the computed against the
+        //      new store. Without this, every vm.$x.* path-binding goes
+        //      stale after a wholesale reassignment.
+        expression(this.#signal() as SchemaPropValue)
       );
       // signalComputed eagerly evaluates its fn once on creation to register
       // dependencies. .peek() returns that cached value without re-running.
