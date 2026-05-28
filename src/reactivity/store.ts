@@ -44,8 +44,21 @@ const $PROXY = Symbol("marjoram.proxy");
 const $NODE = Symbol("marjoram.node");
 const $KEYS = Symbol("marjoram.keys");
 
-const FLAG_IS_STORE = "__m_isStore";
-const FLAG_SKIP = "__m_skip";
+// Flags are Symbols, NOT strings. This is a security boundary: `JSON.parse`
+// cannot produce symbol-keyed properties, so untrusted server JSON fed into a
+// store cannot spoof `isStore` (faking store identity) or `markRaw` (silently
+// escaping reactivity for a security-sensitive subtree). The embeddable-widget
+// threat model assumes hostile data routinely reaches a model.
+const FLAG_IS_STORE = Symbol("marjoram.isStore");
+const FLAG_SKIP = Symbol("marjoram.skip");
+
+// Keys that must never be traversed or written through a path string or proxy
+// child access — blocks prototype-pollution and prototype-chain exfiltration.
+const DANGEROUS_KEYS = new Set<string>([
+  "__proto__",
+  "constructor",
+  "prototype",
+]);
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -218,6 +231,20 @@ const storeHandler: ProxyHandler<object> = {
   },
 
   set(raw, key, newValue, receiver) {
+    // Prototype-pollution guard. `state.__proto__ = x` through the proxy would
+    // call Reflect.set(raw, "__proto__", x) which, in sloppy mode, invokes the
+    // Object.prototype __proto__ setter and reparents the raw object. Swallow
+    // the write (no-op, return true to avoid a strict-mode throw on the caller).
+    if (typeof key === "string" && DANGEROUS_KEYS.has(key)) {
+      if (process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[marjoram] Ignored a write to "${key}" on a store — prototype-affecting keys cannot be set through a store proxy.`
+        );
+      }
+      return true;
+    }
+
     const oldValue = Reflect.get(raw, key, receiver);
     if (Object.is(oldValue, newValue)) return true;
 
@@ -390,6 +417,18 @@ function installDevtoolsFormatter(): void {
  * ```
  */
 export function markRaw<T extends object>(value: T): T {
+  // Guard against catastrophic footgun: marking a shared built-in prototype
+  // would flag EVERY plain object/array on the page as non-reactive, silently
+  // disabling the entire store system.
+  if (
+    value === Object.prototype ||
+    value === Array.prototype ||
+    value === Function.prototype
+  ) {
+    throw new Error(
+      "[marjoram] markRaw() cannot be called on a built-in prototype (Object/Array/Function.prototype) — it would disable reactivity globally."
+    );
+  }
   Object.defineProperty(value, FLAG_SKIP, {
     value: true,
     enumerable: false,
@@ -592,6 +631,9 @@ function readPath(s: object, path: string): unknown {
   let cur: unknown = s;
   for (const p of parts) {
     if (cur === null || cur === undefined) return undefined;
+    // Block prototype-chain traversal — a path like "constructor.prototype"
+    // must not reach Object.prototype, even for reads (exfiltration guard).
+    if (DANGEROUS_KEYS.has(p)) return undefined;
     cur = (cur as Record<string, unknown>)[p];
   }
   return cur;

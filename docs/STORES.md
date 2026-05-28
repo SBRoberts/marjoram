@@ -15,20 +15,21 @@ Both primitives remain valid. Pick at the import site:
 ```ts
 import { signal, store } from "marjoram";
 
-const count   = signal(0);                          // shallow, reference-based
-const state   = store({ user: { name: "Alice" }}); // deep, path-granular
+const count = signal(0); // shallow, reference-based
+const state = store({ user: { name: "Alice" } }); // deep, path-granular
 
 count.set(5);
-state.user.name = "Bob";   // ← just works; subscribers to that path re-run
+state.user.name = "Bob"; // ← just works; subscribers to that path re-run
 ```
 
 This document is the contract `store()` will be held to.
 
 ## 2. Why a separate primitive (not "deep by default")
 
-Marjoram's existing API is built on **explicitness at the call site**. The `$` prefix rule (`vm.$name` reactive, `vm.name` value) makes reactivity legible to anyone reading the code. A flag like `{ deep: true }` declared once and acting invisibly everywhere would break that contract — the most consequential reactivity (nested state) would become the *least* visible.
+Marjoram's existing API is built on **explicitness at the call site**. The `$` prefix rule (`vm.$name` reactive, `vm.name` value) makes reactivity legible to anyone reading the code. A flag like `{ deep: true }` declared once and acting invisibly everywhere would break that contract — the most consequential reactivity (nested state) would become the _least_ visible.
 
 Two named primitives keeps the principle intact:
+
 - `signal(x)` at the call site means "shallow, reference-based."
 - `store(x)` at the call site means "deep, path-granular."
 
@@ -36,15 +37,15 @@ A reader can predict behavior from the import line alone.
 
 ## 3. When to use which (audience: users)
 
-Choose based on the *shape* of the state, not its size:
+Choose based on the _shape_ of the state, not its size:
 
-| State shape | Use |
-|---|---|
-| Primitive (number, string, boolean, etc.) | `signal()` |
-| Reference to a whole opaque object that's swapped wholesale (DOM node, class instance, `Date`) | `signal()` |
-| Plain object or array you'll *mutate in place* | `store()` |
-| Plain object you treat as immutable (always replaced wholesale) | `signal()` works fine — `store()` is overkill |
-| Mixed: a viewmodel that holds primitives *and* nested objects | Use `signal()` for the primitives at top level and `store()` for the nested branches, or wrap the whole viewmodel in one `store()` if every leaf is plain-data |
+| State shape                                                                                    | Use                                                                                                                                                            |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Primitive (number, string, boolean, etc.)                                                      | `signal()`                                                                                                                                                     |
+| Reference to a whole opaque object that's swapped wholesale (DOM node, class instance, `Date`) | `signal()`                                                                                                                                                     |
+| Plain object or array you'll _mutate in place_                                                 | `store()`                                                                                                                                                      |
+| Plain object you treat as immutable (always replaced wholesale)                                | `signal()` works fine — `store()` is overkill                                                                                                                  |
+| Mixed: a viewmodel that holds primitives _and_ nested objects                                  | Use `signal()` for the primitives at top level and `store()` for the nested branches, or wrap the whole viewmodel in one `store()` if every leaf is plain-data |
 
 **Rules of thumb:**
 
@@ -58,7 +59,10 @@ The whole public surface, deliberately small:
 
 ```ts
 // Core
-export function store<T extends object>(initial: T, options?: StoreOptions): Store<T>;
+export function store<T extends object>(
+  initial: T,
+  options?: StoreOptions
+): Store<T>;
 
 // Type
 export type Store<T extends object> = T & { readonly [__brand]: "Store" };
@@ -70,8 +74,9 @@ export function snapshot<T extends object>(s: Store<T>): T;
 export function subscribe<T extends object, P extends Path<T> | "">(
   s: Store<T>,
   path: P,
-  callback: P extends "" ? (newValue: T, oldValue: T) => void
-                         : (newValue: PathValue<T, P>, oldValue: PathValue<T, P>) => void
+  callback: P extends ""
+    ? (newValue: T, oldValue: T) => void
+    : (newValue: PathValue<T, P>, oldValue: PathValue<T, P>) => void
 ): () => void;
 
 export function isStore(value: unknown): value is Store<object>;
@@ -84,7 +89,10 @@ export function markRaw<T extends object>(value: T): T;
 // Path type helpers (zero runtime cost — TypeScript only).
 // See docs/STORE_RESEARCH_FINDINGS.md §8 for the exact implementation.
 export type Path<T> = /* depth-capped recursive dotted-string union */ string;
-export type PathValue<T, P extends string> = /* resolves path to value type */ unknown;
+export type PathValue<
+  T,
+  P extends string,
+> = /* resolves path to value type */ unknown;
 
 // Options
 export interface StoreOptions {
@@ -110,7 +118,7 @@ state.todos.push({ id: 2, text: "Walk dog", done: false }); // notifies todos.le
 
 ### 4.2 `snapshot(s)`
 
-Returns a deep plain-object copy of the store at this moment. Use for serialization, structural equality, logging, and tests. Reading `snapshot` does *not* track dependencies — it's a side-effect-free read for use *outside* reactive contexts. If you read it inside an `effect`, the effect won't re-run when the store changes.
+Returns a deep plain-object copy of the store at this moment. Use for serialization, structural equality, logging, and tests. Reading `snapshot` does _not_ track dependencies — it's a side-effect-free read for use _outside_ reactive contexts. If you read it inside an `effect`, the effect won't re-run when the store changes.
 
 ```ts
 JSON.stringify(snapshot(state)); // safe, deep, plain
@@ -140,6 +148,10 @@ offAll();
 
 The path string is checked against `T` at compile time. `subscribe(state, "user.nope", cb)` is a type error if `T['user']` has no `nope` property. See §8 for path-type details.
 
+> **Cost of `subscribe(state, "", cb)`:** the whole-store form deep-walks the entire reactive tree on every change to produce the snapshot it hands the callback. That's O(total tree size) work _per write_ while the subscription is active. For large or hot stores, prefer a path-scoped `subscribe(state, "some.path", cb)` or an `effect()` that reads only what it needs. The whole-store form is a convenience for small stores and debugging, not a hot path.
+
+> **Prototype-key safety:** path segments and proxy child-access for `__proto__`, `constructor`, and `prototype` are blocked — they resolve to `undefined` rather than traversing into the prototype chain. Writes to those keys through a store proxy are silently ignored (dev mode warns). This protects against prototype-pollution and prototype-chain exfiltration when stores hold untrusted data. The internal `isStore`/`markRaw` flags are `Symbol`s, so untrusted JSON (which can only produce string keys) cannot spoof store identity or escape reactivity.
+
 ### 4.4 `markRaw(value)`
 
 Marks a plain object or array so that `store()` will **never** proxy it. Useful for stashing arbitrary non-reactive payloads (a config blob, a parsed AST, a 3rd-party library's state) inside a store. Once marked, the object passes through untouched — reads return the raw value, writes to nested keys are invisible to the store.
@@ -153,7 +165,7 @@ const state = store({
 });
 
 state.parsedAst.someNode = "x"; // no notification, no overhead
-state.user.name = "Bob";        // reactive, granular as always
+state.user.name = "Bob"; // reactive, granular as always
 ```
 
 This is the same idea as Vue's `markRaw` — opt out a single value from being made reactive. Combined with the §6 boundary rules (class instances, `Date`, `Map`, `Set` pass through automatically), `markRaw` covers the rare case where you have a plain object you want to keep outside the proxy tree.
@@ -183,11 +195,11 @@ effect(() => {
   console.log(state.user.name);
 });
 
-state.user.age = 31;     // ← does NOT re-run the effect above
+state.user.age = 31; // ← does NOT re-run the effect above
 state.user.name = "Bob"; // ← re-runs the effect
 ```
 
-Reading an object subtree subscribes to *that subtree's identity*, not to every descendant:
+Reading an object subtree subscribes to _that subtree's identity_, not to every descendant:
 
 ```ts
 effect(() => {
@@ -195,11 +207,11 @@ effect(() => {
   console.log(state.user);
 });
 
-state.user.name = "Bob";          // ← does NOT re-run
-state.user = { name: "Carol" };   // ← re-runs
+state.user.name = "Bob"; // ← does NOT re-run
+state.user = { name: "Carol" }; // ← re-runs
 ```
 
-Iteration subscribes to the *key set* (so iteration is reactive to add/remove, not to value changes you didn't iterate over):
+Iteration subscribes to the _key set_ (so iteration is reactive to add/remove, not to value changes you didn't iterate over):
 
 ```ts
 effect(() => {
@@ -208,22 +220,22 @@ effect(() => {
   }
 });
 
-state.user.email = "a@b";  // ← re-runs (new key)
-state.user.name = "Bob";   // ← does NOT re-run (key set unchanged)
+state.user.email = "a@b"; // ← re-runs (new key)
+state.user.name = "Bob"; // ← does NOT re-run (key set unchanged)
 ```
 
 ### 5.2 What writes notify
 
-| Operation | Notifies |
-|---|---|
-| `state.a.b = x` (same value per `Object.is`) | nothing (no-op) |
-| `state.a.b = x` (different value) | subscribers to `a.b` |
-| `state.a.b = x` (where `b` is a new key) | subscribers to `a.b` *and* iteration subscribers on `a` |
-| `delete state.a.b` | subscribers to `a.b` *and* iteration subscribers on `a` |
-| `state.a = newObj` (replacing subtree) | subscribers to `a` (subtree identity changed) *and* any active per-path subscribers in the old `a` subtree that no longer have a counterpart |
-| `arr.push(x)` | subscribers to `arr[length]` (the new index) *and* `arr.length` — coalesced into a single notification round |
-| `arr.splice(i, n, ...items)` | each affected index, plus `length`, plus iteration — single round |
-| `arr[i] = x` | subscribers to `arr[i]` only |
+| Operation                                    | Notifies                                                                                                                                     |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `state.a.b = x` (same value per `Object.is`) | nothing (no-op)                                                                                                                              |
+| `state.a.b = x` (different value)            | subscribers to `a.b`                                                                                                                         |
+| `state.a.b = x` (where `b` is a new key)     | subscribers to `a.b` _and_ iteration subscribers on `a`                                                                                      |
+| `delete state.a.b`                           | subscribers to `a.b` _and_ iteration subscribers on `a`                                                                                      |
+| `state.a = newObj` (replacing subtree)       | subscribers to `a` (subtree identity changed) _and_ any active per-path subscribers in the old `a` subtree that no longer have a counterpart |
+| `arr.push(x)`                                | subscribers to `arr[length]` (the new index) _and_ `arr.length` — coalesced into a single notification round                                 |
+| `arr.splice(i, n, ...items)`                 | each affected index, plus `length`, plus iteration — single round                                                                            |
+| `arr[i] = x`                                 | subscribers to `arr[i]` only                                                                                                                 |
 
 ### 5.3 Batching
 
@@ -240,17 +252,17 @@ batch(() => {
 
 A store proxies **only plain objects and arrays**. Everything else is stored and returned by reference, unmodified. The boundary is checked once at proxy-creation time per nested value.
 
-| Input type | Behavior |
-|---|---|
-| Plain object (`Object.getPrototypeOf(x) === Object.prototype` or `null`) | **Proxied** |
-| Array (`Array.isArray(x)`) | **Proxied** (see §7 for array specifics) |
-| `null`, `undefined`, primitives | Stored by value, no proxy |
-| `Date` | Pass through — `date.setHours(...)` is invisible to the store |
-| `Map`, `Set`, `WeakMap`, `WeakSet` | Pass through — mutations invisible |
-| `RegExp`, `Promise`, `ArrayBuffer`, typed arrays | Pass through |
-| Functions | Pass through (used as-is; `this`-binding preserved) |
-| DOM nodes, class instances (anything with a non-Object prototype) | **Pass through** |
-| Frozen objects (`Object.isFrozen(x)`) | Stored as-is, no proxy. Writes throw in strict mode (same as JS native). |
+| Input type                                                               | Behavior                                                                 |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| Plain object (`Object.getPrototypeOf(x) === Object.prototype` or `null`) | **Proxied**                                                              |
+| Array (`Array.isArray(x)`)                                               | **Proxied** (see §7 for array specifics)                                 |
+| `null`, `undefined`, primitives                                          | Stored by value, no proxy                                                |
+| `Date`                                                                   | Pass through — `date.setHours(...)` is invisible to the store            |
+| `Map`, `Set`, `WeakMap`, `WeakSet`                                       | Pass through — mutations invisible                                       |
+| `RegExp`, `Promise`, `ArrayBuffer`, typed arrays                         | Pass through                                                             |
+| Functions                                                                | Pass through (used as-is; `this`-binding preserved)                      |
+| DOM nodes, class instances (anything with a non-Object prototype)        | **Pass through**                                                         |
+| Frozen objects (`Object.isFrozen(x)`)                                    | Stored as-is, no proxy. Writes throw in strict mode (same as JS native). |
 
 **Rationale:** wrapping a `Date` because it happens to be an object is the kind of magic that destroys trust. Vue's `markRaw` exists because they got this wrong initially. We get it right from day one by being conservative: if the object has any non-`Object` prototype, it's user code or a built-in we don't understand, and we leave it alone.
 
@@ -277,19 +289,24 @@ interface User {
   tags: string[];
 }
 
-const state = store<User>({ name: "Alice", address: { city: "NYC", zip: "10001" }, tags: ["a"] });
+const state = store<User>({
+  name: "Alice",
+  address: { city: "NYC", zip: "10001" },
+  tags: ["a"],
+});
 
-state.name;             // string
-state.address.city;     // string
-state.tags[0];          // string
-state.tags.length;      // number
+state.name; // string
+state.address.city; // string
+state.tags[0]; // string
+state.tags.length; // number
 
-state.address.city = "LA";  // ok
-state.address = { city: "LA", zip: "90001" };  // ok
-state.address = "wrong";   // ts error
+state.address.city = "LA"; // ok
+state.address = { city: "LA", zip: "90001" }; // ok
+state.address = "wrong"; // ts error
 ```
 
 The `Store<T>` brand is a phantom `unique symbol` property so that:
+
 - `isStore(s)` can narrow.
 - `store(plainObject)` and `plainObject` are not interchangeable in code that explicitly demands one — APIs can opt into requiring stores.
 
@@ -305,7 +322,7 @@ This is the same ownership model that already governs `signal` and `computed` in
 
 ### 9.2 Per-path SignalNode GC
 
-Internally, each tracked path gets its own `SignalNode`. When a path stops having subscribers *and* no longer exists in the data (because a parent was replaced or the key was deleted), the `SignalNode` is dropped. Implementation uses a tree keyed by the raw object identity, with `WeakRef`s where possible so unreachable subtrees GC naturally.
+Internally, each tracked path gets its own `SignalNode`. When a path stops having subscribers _and_ no longer exists in the data (because a parent was replaced or the key was deleted), the `SignalNode` is dropped. Implementation uses a tree keyed by the raw object identity, with `WeakRef`s where possible so unreachable subtrees GC naturally.
 
 This matters because long-lived stores with churning data (e.g., a list of 100k items where you replace the entire list every minute) must not leak memory.
 
@@ -327,10 +344,10 @@ html`<p>Hello, ${state.$user.name}!</p>`;
 
 ```ts
 // All valid:
-html`<p>${state.$user.name}</p>`             // leaf
-html`<p>${state.$user}</p>`                  // whole subtree, re-renders on user identity change
-html`<p>${state.$user.address.city}</p>`     // deep leaf
-html`<p>${state.$user.compute(u => u.name.toUpperCase())}</p>`  // transform
+html`<p>${state.$user.name}</p>`; // leaf
+html`<p>${state.$user}</p>`; // whole subtree, re-renders on user identity change
+html`<p>${state.$user.address.city}</p>`; // deep leaf
+html`<p>${state.$user.compute(u => u.name.toUpperCase())}</p>`; // transform
 ```
 
 The path-binding proxy supports the existing `SchemaProp` methods (`compute`, `observe`, `value`, `peek`). Naming collisions with data property names (`state.$user.compute` when `user` has a `compute` property) are resolved in favor of the method, and a dev-mode warning fires. This matches Vue's precedent with `.value`.
@@ -341,12 +358,12 @@ The path-binding proxy supports the existing `SchemaProp` methods (`compute`, `o
 
 ```ts
 const vm = useViewModel({
-  count: 0,                              // signal — same as today
-  user: store({ name: "Alice" }),        // store — opt-in
+  count: 0, // signal — same as today
+  user: store({ name: "Alice" }), // store — opt-in
 });
 
-vm.count = 5;             // works as today
-vm.user.name = "Bob";     // deep mutation, granular notification
+vm.count = 5; // works as today
+vm.user.name = "Bob"; // deep mutation, granular notification
 
 html`
   <p>Count: ${vm.$count}</p>
@@ -387,21 +404,22 @@ This is the central architectural win: there is no parallel reactivity system to
 
 Honest. Where competitors are better, we say so.
 
-| Feature | Marjoram `store` (this proposal) | Solid `createStore` | Vue 3 `reactive` | Valtio `proxy` | MobX `observable` |
-|---|---|---|---|---|---|
-| Deep reactive | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Path-level granularity | ✅ | ✅ | ✅ | ✅ | partial |
-| Mutable-feeling API | ✅ | ⚠️ explicit setter | ✅ | ✅ | ✅ |
-| Plain object/array only (no class wrapping) | ✅ | ✅ | partial (uses `markRaw` to opt out) | ✅ | needs config |
-| Atomic multi-path updates | via `batch()` | ✅ path-setter | via `batch` | via `batch` | via `action` |
-| `Map`/`Set` reactive variants | ❌ (deferred) | ❌ | ✅ | ✅ | ✅ |
-| Snapshot to plain object | ✅ `snapshot()` | ✅ `unwrap`/manual | ✅ `toRaw` (shallow) | ✅ `snapshot` | partial |
-| Devtools custom formatter | ✅ (planned) | ❌ | ✅ | ❌ | ✅ |
-| Type-preserving through depth | ✅ | ✅ | ✅ | partial | partial |
-| Zero runtime dependencies | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Library size (whole lib gzipped) | ~5KB target | ~7KB | ~34KB | ~3KB (just store) | ~16KB |
+| Feature                                     | Marjoram `store` (this proposal) | Solid `createStore` | Vue 3 `reactive`                    | Valtio `proxy`    | MobX `observable` |
+| ------------------------------------------- | -------------------------------- | ------------------- | ----------------------------------- | ----------------- | ----------------- |
+| Deep reactive                               | ✅                               | ✅                  | ✅                                  | ✅                | ✅                |
+| Path-level granularity                      | ✅                               | ✅                  | ✅                                  | ✅                | partial           |
+| Mutable-feeling API                         | ✅                               | ⚠️ explicit setter  | ✅                                  | ✅                | ✅                |
+| Plain object/array only (no class wrapping) | ✅                               | ✅                  | partial (uses `markRaw` to opt out) | ✅                | needs config      |
+| Atomic multi-path updates                   | via `batch()`                    | ✅ path-setter      | via `batch`                         | via `batch`       | via `action`      |
+| `Map`/`Set` reactive variants               | ❌ (deferred)                    | ❌                  | ✅                                  | ✅                | ✅                |
+| Snapshot to plain object                    | ✅ `snapshot()`                  | ✅ `unwrap`/manual  | ✅ `toRaw` (shallow)                | ✅ `snapshot`     | partial           |
+| Devtools custom formatter                   | ✅ (planned)                     | ❌                  | ✅                                  | ❌                | ✅                |
+| Type-preserving through depth               | ✅                               | ✅                  | ✅                                  | partial           | partial           |
+| Zero runtime dependencies                   | ✅                               | ✅                  | ❌                                  | ❌                | ❌                |
+| Library size (whole lib gzipped)            | ~5KB target                      | ~7KB                | ~34KB                               | ~3KB (just store) | ~16KB             |
 
 **Where competitors are honestly better:**
+
 - **Solid's path-setter syntax** (`setState("user", "name", "Bob")`) is more explicit at the call site and lets you express conditional and functional updates in a single call. We deliberately chose mutable assignment for DX reasons (less ceremony for the 90% case), but recognize the readability tradeoff. Users who want the explicit form can write their own helper.
 - **Vue's reactive `Map`/`Set`.** Deferred — adding them is a real cost in bundle size and complexity that we don't think pays rent for the typical embeddable-widget use case. Revisit in v1.3+ if demand is real.
 - **MobX's `action` boundaries** for clearer transactional semantics. Our answer is `batch()`, which is functionally equivalent but less semantically opinionated.
@@ -415,11 +433,11 @@ Failure modes we know exist and how to think about them.
 ```ts
 const state = store({ user: { name: "Alice" } });
 
-const { user } = state;        // ← user is now a stable proxy reference
-user.name = "Bob";              // ✅ still reactive (same proxy)
+const { user } = state; // ← user is now a stable proxy reference
+user.name = "Bob"; // ✅ still reactive (same proxy)
 
-const { name } = state.user;    // ← name is a primitive copy
-state.user.name = "Bob";        // ← `name` const is stale, store updates correctly
+const { name } = state.user; // ← name is a primitive copy
+state.user.name = "Bob"; // ← `name` const is stale, store updates correctly
 ```
 
 Rule: destructuring an object pulls out the proxy (still reactive). Destructuring a primitive pulls out the value (snapshot). Same as JavaScript.
@@ -436,11 +454,11 @@ Writing to a store inside a `computed` or `html` interpolation creates a cycle. 
 
 ```ts
 const state = store({ date: new Date() });
-state.date.setHours(10);  // ← invisible to the store; no effect re-runs
+state.date.setHours(10); // ← invisible to the store; no effect re-runs
 state.date = new Date(); // ← visible; subscribers to `date` re-run
 ```
 
-If you need reactivity inside a class instance, hold the *primitive* fields you care about as separate store keys.
+If you need reactivity inside a class instance, hold the _primitive_ fields you care about as separate store keys.
 
 ### 12.5 `unwrap` mutations don't notify
 
@@ -467,12 +485,12 @@ Scope guard — features we considered and rejected (for v1.1):
 
 All previously-open design questions have been resolved by the research pass documented in [STORE_RESEARCH_FINDINGS.md](STORE_RESEARCH_FINDINGS.md):
 
-| ID | Question | Resolution | Reason |
-|---|---|---|---|
-| 1 | Auto-store nested plain objects in `useViewModel`? | **No** — explicit `store()` only | Non-breaking-change rule (see [STORE_IMPLEMENTATION_PLAN.md](STORE_IMPLEMENTATION_PLAN.md)) |
-| 2 | `produce`-style transactions? | **No** — `batch()` covers it | Valtio ships without; structural-sharing cost not worth it |
-| 3 | Method-vs-data collision policy on path-binding proxies? | **Method wins, dev-mode warning** | Matches Vue's `.value` precedent |
-| 4 | `subscribe()` accepts a path filter? | **Yes — compile-time-typed path** | See §4.3, §8 |
+| ID  | Question                                                 | Resolution                        | Reason                                                                                      |
+| --- | -------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------- |
+| 1   | Auto-store nested plain objects in `useViewModel`?       | **No** — explicit `store()` only  | Non-breaking-change rule (see [STORE_IMPLEMENTATION_PLAN.md](STORE_IMPLEMENTATION_PLAN.md)) |
+| 2   | `produce`-style transactions?                            | **No** — `batch()` covers it      | Valtio ships without; structural-sharing cost not worth it                                  |
+| 3   | Method-vs-data collision policy on path-binding proxies? | **Method wins, dev-mode warning** | Matches Vue's `.value` precedent                                                            |
+| 4   | `subscribe()` accepts a path filter?                     | **Yes — compile-time-typed path** | See §4.3, §8                                                                                |
 
 Phase 2 implementation can proceed.
 
@@ -497,35 +515,46 @@ createWidget<FormState>({
       address: { street: "", city: "", zip: "" },
       preferences: { newsletter: false, theme: "light" },
     }),
-    isValid: vm => vm.form.user.email.includes("@") && vm.form.user.name.length > 0,
+    isValid: vm =>
+      vm.form.user.email.includes("@") && vm.form.user.name.length > 0,
   },
   render: vm => html`
     <form>
       <input
         ref="name"
         value="${vm.$form.user.name}"
-        oninput="${(e: Event) => (vm.form.user.name = (e.target as HTMLInputElement).value)}"
+        oninput="${(e: Event) =>
+          (vm.form.user.name = (e.target as HTMLInputElement).value)}"
       />
       <input
         ref="email"
         value="${vm.$form.user.email}"
-        oninput="${(e: Event) => (vm.form.user.email = (e.target as HTMLInputElement).value)}"
+        oninput="${(e: Event) =>
+          (vm.form.user.email = (e.target as HTMLInputElement).value)}"
       />
       <button disabled="${vm.$isValid.compute(v => !v)}">Submit</button>
-      ${when(vm.$isValid, () => html`<p>Looks good!</p>`, () => html`<p>Fill out name and email.</p>`)}
+      ${when(
+        vm.$isValid,
+        () => html`<p>Looks good!</p>`,
+        () => html`<p>Fill out name and email.</p>`
+      )}
     </form>
   `,
 });
 ```
 
-The granularity guarantee: typing in the name field re-renders *only* the name input's binding and the `isValid` computed (which the disabled state and `when` depend on). The email input is untouched.
+The granularity guarantee: typing in the name field re-renders _only_ the name input's binding and the `isValid` computed (which the disabled state and `when` depend on). The email input is untouched.
 
 ### 15.2 A keyed todo list
 
 ```ts
 import { createWidget, html, useViewModel, store, repeat } from "marjoram";
 
-interface Todo { id: number; text: string; done: boolean; }
+interface Todo {
+  id: number;
+  text: string;
+  done: boolean;
+}
 
 createWidget({
   target: "#todos",
@@ -546,7 +575,8 @@ createWidget({
               onchange="${(e: Event) => {
                 // Find the todo by id and mutate in place — granular update.
                 const target = vm.todos.find(x => x.id === t.id);
-                if (target) target.done = (e.target as HTMLInputElement).checked;
+                if (target)
+                  target.done = (e.target as HTMLInputElement).checked;
               }}"
             />
             ${t.text}
