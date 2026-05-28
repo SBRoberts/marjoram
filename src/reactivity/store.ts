@@ -85,8 +85,11 @@ function shouldProxy(value: unknown): value is object {
   if (value === null || typeof value !== "object") return false;
   // markRaw opt-out
   if ((value as Record<PropertyKey, unknown>)[FLAG_SKIP] === true) return false;
-  // Frozen objects can't be safely proxied (writes would throw).
-  if (Object.isFrozen(value)) return false;
+  // Non-extensible objects (frozen, sealed, or Object.preventExtensions'd)
+  // can't carry the $PROXY / $NODE symbol metadata — defineProperty would
+  // throw. isExtensible === false covers all three cases (frozen ⊆ sealed ⊆
+  // non-extensible). Pass them through by reference instead.
+  if (!Object.isExtensible(value)) return false;
   // Only plain objects and arrays. Class instances, Date, Map, Set, DOM
   // nodes, etc. all have non-Object/non-Array prototypes.
   const proto = Object.getPrototypeOf(value);
@@ -337,7 +340,9 @@ function wrap<T extends object>(raw: T): T {
     Object.defineProperty(raw, $PROXY, {
       value: proxy,
       enumerable: false,
-      configurable: false,
+      // configurable so the slot can be cleared if a future disposal path
+      // ever needs to re-wrap; harmless today, keeps options open.
+      configurable: true,
       writable: false,
     });
   }
@@ -373,6 +378,12 @@ export function store<T extends object>(initial: T): Store<T> {
   // short-circuits, and Terser dead-code-eliminates the entire formatter
   // body via the @rollup/plugin-replace substitution.
   installDevtoolsFormatter();
+  // Defensive: T is typed `extends object`, but loose/untyped callers (or JS
+  // consumers) may pass null/undefined/primitives. Return them unchanged
+  // rather than throwing on the flag read below.
+  if (initial === null || typeof initial !== "object") {
+    return initial as Store<T>;
+  }
   // Already a store — return as-is (idempotent, handles cycles).
   if ((initial as Record<PropertyKey, unknown>)[FLAG_IS_STORE] === true) {
     return initial as Store<T>;

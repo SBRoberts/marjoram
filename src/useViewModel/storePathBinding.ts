@@ -21,8 +21,12 @@ import { SchemaProp } from "../schema";
 /**
  * The set of keys reserved by SchemaProp — accessed through the proxy, these
  * delegate to the underlying SchemaProp instance instead of traversing into
- * the store. Derived once from SchemaProp.prototype so it stays in sync with
- * the class.
+ * the store. Hand-maintained: it must include the instance fields set in the
+ * constructor (`key`, `id`) which aren't on the prototype, plus the prototype
+ * methods and the dynamic array-method getters. If SchemaProp gains a new
+ * public member, add it here (the store-path-binding tests cover the common
+ * ones). Kept explicit rather than reflected so a stray prototype symbol can
+ * never accidentally shadow a data key.
  */
 const SCHEMA_PROP_KEYS = new Set<string | symbol>([
   // Static/dynamic instance fields
