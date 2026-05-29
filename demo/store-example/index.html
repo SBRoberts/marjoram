@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Marjoram — store() deep reactivity demo</title>
+    <style>
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        max-width: 640px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        color: #1a1a1a;
+      }
+      h1 {
+        font-size: 1.3rem;
+      }
+      .panel {
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
+      }
+      label {
+        display: block;
+        margin: 0.5rem 0;
+      }
+      input {
+        padding: 0.35rem 0.5rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        width: 16rem;
+      }
+      .count {
+        color: #3ba776;
+        font-variant-numeric: tabular-nums;
+        font-size: 0.85rem;
+      }
+      .preview {
+        background: #f6f8fa;
+        padding: 0.5rem 0.75rem;
+        border-radius: 4px;
+        font-family: ui-monospace, monospace;
+        white-space: pre-wrap;
+      }
+      button {
+        padding: 0.35rem 0.75rem;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+        cursor: pointer;
+      }
+      li.done {
+        text-decoration: line-through;
+        color: #999;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Marjoram <code>store()</code> — granular deep reactivity</h1>
+    <p>
+      Each field shows its own render count. Editing one deeply-nested field
+      re-renders <em>only that field's binding</em> — the counts prove it.
+    </p>
+
+    <div class="panel" id="form"></div>
+    <div class="panel" id="todos"></div>
+
+    <!-- Load the built UMD bundle (run `npm run build` first). -->
+    <script src="../../dist/marjoram.umd.js"></script>
+    <script>
+      const { createWidget, html, useViewModel, store, repeat, snapshot } =
+        window.marjoram;
+
+      // Per-binding render counters so granularity is visible.
+      const renders = { name: 0, email: 0, city: 0, zip: 0 };
+      const bump = k => {
+        renders[k]++;
+        return renders[k];
+      };
+
+      // --- Deeply nested form, all driven by ONE store ---
+      createWidget({
+        target: "#form",
+        model: {
+          form: store({
+            user: { name: "Alice", email: "alice@example.com" },
+            address: { city: "NYC", zip: "10001" },
+          }),
+        },
+        render: vm => html`
+          <h2>Nested form</h2>
+          <label
+            >Name
+            <input
+              value="${vm.$form.user.name}"
+              oninput="${e => (vm.form.user.name = e.target.value)}"
+          /></label>
+          <span class="count"
+            >name binding renders:
+            ${vm.$form.user.name.compute(() => bump("name"))}</span
+          >
+
+          <label
+            >Email
+            <input
+              value="${vm.$form.user.email}"
+              oninput="${e => (vm.form.user.email = e.target.value)}"
+          /></label>
+          <span class="count"
+            >email binding renders:
+            ${vm.$form.user.email.compute(() => bump("email"))}</span
+          >
+
+          <label
+            >City
+            <input
+              value="${vm.$form.address.city}"
+              oninput="${e => (vm.form.address.city = e.target.value)}"
+          /></label>
+          <span class="count"
+            >city binding renders:
+            ${vm.$form.address.city.compute(() => bump("city"))}</span
+          >
+
+          <label
+            >Zip
+            <input
+              value="${vm.$form.address.zip}"
+              oninput="${e => (vm.form.address.zip = e.target.value)}"
+          /></label>
+          <span class="count"
+            >zip binding renders:
+            ${vm.$form.address.zip.compute(() => bump("zip"))}</span
+          >
+
+          <p class="preview">
+            ${vm.$form.compute(f => JSON.stringify(snapshot(f), null, 2))}
+          </p>
+        `,
+      }).mount();
+
+      // --- Keyed todo list driven by a store array + repeat() ---
+      createWidget({
+        target: "#todos",
+        model: {
+          todos: store([
+            { id: 1, text: "Buy milk", done: false },
+            { id: 2, text: "Walk dog", done: false },
+          ]),
+          nextId: 3,
+        },
+        render: vm => html`
+          <h2>Keyed todos (store array + repeat)</h2>
+          <ul>
+            ${repeat(
+              vm.$todos,
+              t => t.id,
+              t => html`<li class="${t.done ? "done" : ""}">${t.text}</li>`
+            )}
+          </ul>
+          <button
+            onclick="${() =>
+              vm.todos.push({
+                id: vm.nextId++,
+                text: "New task " + (vm.nextId - 1),
+                done: false,
+              })}"
+          >
+            Add todo
+          </button>
+          <button onclick="${() => vm.todos.pop()}">Remove last</button>
+        `,
+      }).mount();
+    </script>
+  </body>
+</html>
