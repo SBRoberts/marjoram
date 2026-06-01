@@ -431,5 +431,5 @@ These get decided in Phase 1, written up in the design doc, and don't block star
 - Existing schema/prop bridge: [src/schema/schemaPropFactory.ts](../src/schema/schemaPropFactory.ts)
 - Existing keyed list helper (Phase 0 export target): [src/view/external/repeat.ts](../src/view/external/repeat.ts)
 - Public API surface: [src/index.ts](../src/index.ts)
-- Project conventions and contracts: [CLAUDE.md](../CLAUDE.md) (symlinks: `AGENTS.md`, `.github/copilot-instructions.md`)
+- Project conventions and contracts: [AGENTS.md](../AGENTS.md) (symlinked from `CLAUDE.md` and `.github/copilot-instructions.md`)
 - Performance testing philosophy: [PERFORMANCE_TESTING_PHILOSOPHY.md](../PERFORMANCE_TESTING_PHILOSOPHY.md)
