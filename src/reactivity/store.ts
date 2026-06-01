@@ -1,21 +1,26 @@
 // ---------------------------------------------------------------------------
 // store() — deep reactivity primitive.
 //
-// Peer to signal(): where signal() is shallow and reference-based, store() is
-// deep and path-granular. Mutating state.user.address.city = "x" notifies only
-// subscribers to that exact path. Built on the same SignalNode + Subscriber
-// machinery as signal() — no parallel reactivity system.
+// Peer to signal(): where signal() is shallow and reference-based, store()
+// is deep and path-granular. Mutating state.user.address.city = "x"
+// notifies only subscribers to that exact path.
+//
+// Implementation note (v1.2): every per-path tracking node is a real
+// `signal()` carrying `equals: () => false` and `[Signal.subtle.unwatched]`
+// for lazy GC. No internal escape hatches into reactivity — the entire
+// deep-reactivity surface is built from the public primitives that the
+// TC39 Signals proposal defines (plus the small `Signal.subtle.isTracking`
+// extension). This doubles as a worked example that the spec primitives
+// are sufficient for deep reactivity.
 //
 // Design contract: docs/STORES.md.
 // Patterns verified against competitor source: docs/STORE_RESEARCH_FINDINGS.md.
 // ---------------------------------------------------------------------------
 
 import {
-  type SignalNode,
-  _isTracking,
-  _createNode,
-  _track,
-  _notify,
+  signal,
+  type Signal as SignalCallable,
+  Signal,
   batch,
   effect as signalEffect,
   untracked,
@@ -99,10 +104,18 @@ function shouldProxy(value: unknown): value is object {
 }
 
 // ---------------------------------------------------------------------------
-// Per-raw-object SignalNode map. Created lazily, on first tracked read.
+// Per-raw-object signal map. Created lazily, on first tracked read.
+//
+// Each entry is a real `signal(undefined, { equals: () => false, [unwatched]: ... })`:
+//   - value is unused (raw[key] is the source of truth)
+//   - equals: () => false makes every .set(undefined) a real notification
+//   - [unwatched] GCs the entry when the last live consumer disconnects,
+//     but only if no non-live consumers (computeds without watchers) are
+//     still referencing it.
 // ---------------------------------------------------------------------------
 
-type NodeMap = Record<PropertyKey, SignalNode>;
+type PathSignal = SignalCallable<undefined>;
+type NodeMap = Record<PropertyKey, PathSignal>;
 
 function getOrCreateNodeMap(raw: object): NodeMap {
   let nodes = (raw as Record<symbol, unknown>)[$NODE] as NodeMap | undefined;
@@ -118,19 +131,35 @@ function getOrCreateNodeMap(raw: object): NodeMap {
   return nodes;
 }
 
+function ensurePathSignal(nodes: NodeMap, key: PropertyKey): PathSignal {
+  let s = nodes[key];
+  if (!s) {
+    // Holds undefined forever; what matters is the version bump on each .set.
+    const created: PathSignal = signal<undefined>(undefined, {
+      equals: () => false,
+      [Signal.subtle.unwatched]: () => {
+        // Reclaim the slot only when no readers remain at all — a non-live
+        // computed reader (no downstream watcher) still needs the same
+        // signal identity to be notified when the path changes later.
+        // hasObservers (Marjoram extension) counts ANY subscriber type,
+        // including effects; the spec-shaped `hasSinks` would miss those.
+        if (!Signal.subtle.hasObservers(created)) delete nodes[key];
+      },
+    });
+    s = created;
+    nodes[key] = s;
+  }
+  return s;
+}
+
 /**
  * Subscribe the active reactive context (if any) to raw[key]. No-op outside
  * a tracked context — this is the "reads are free" guarantee.
  */
 function trackPath(raw: object, key: PropertyKey): void {
-  if (!_isTracking()) return;
+  if (!Signal.subtle.isTracking()) return;
   const nodes = getOrCreateNodeMap(raw);
-  let node = nodes[key];
-  if (!node) {
-    node = _createNode(undefined);
-    nodes[key] = node;
-  }
-  _track(node);
+  ensurePathSignal(nodes, key)(); // reading subscribes the active tracker
 }
 
 /**
@@ -139,45 +168,21 @@ function trackPath(raw: object, key: PropertyKey): void {
  * removed.
  */
 function trackKeys(raw: object): void {
-  if (!_isTracking()) return;
+  if (!Signal.subtle.isTracking()) return;
   const nodes = getOrCreateNodeMap(raw);
-  let node = nodes[$KEYS];
-  if (!node) {
-    node = _createNode(undefined);
-    nodes[$KEYS] = node;
-  }
-  _track(node);
+  ensurePathSignal(nodes, $KEYS)();
 }
 
 /** Fire subscribers of raw[key]. No-op if nothing ever tracked it. */
 function notifyPath(raw: object, key: PropertyKey): void {
   const nodes = (raw as Record<symbol, unknown>)[$NODE] as NodeMap | undefined;
-  if (!nodes) return;
-  const node = nodes[key];
-  if (node) _notify(node);
+  nodes?.[key]?.set(undefined);
 }
 
 /** Fire iteration / key-set subscribers. */
 function notifyKeys(raw: object): void {
   const nodes = (raw as Record<symbol, unknown>)[$NODE] as NodeMap | undefined;
-  if (!nodes) return;
-  const node = nodes[$KEYS];
-  if (node) _notify(node);
-}
-
-/**
- * Drop a path's SignalNode from the map. Call AFTER notifyPath so any pending
- * subscribers have already been scheduled — they re-run and re-subscribe to a
- * fresh node, and this orphaned node GCs. Prevents unbounded growth of the
- * $NODE map for stores with churning keys (caches, dynamic maps).
- *
- * For replaced object subtrees no explicit drop is needed: the old raw object
- * carries its own $NODE via a symbol property, so the whole subtree's metadata
- * GCs together with the unreachable old object.
- */
-function dropNode(raw: object, key: PropertyKey): void {
-  const nodes = (raw as Record<symbol, unknown>)[$NODE] as NodeMap | undefined;
-  if (nodes && key in nodes) delete nodes[key];
+  nodes?.[$KEYS]?.set(undefined);
 }
 
 // ---------------------------------------------------------------------------
@@ -290,7 +295,9 @@ const storeHandler: ProxyHandler<object> = {
         if (newLen < oldLength) {
           for (let i = newLen; i < oldLength; i++) {
             notifyPath(raw, String(i));
-            dropNode(raw, String(i)); // removed index — GC its node
+            // GC is handled by [Signal.subtle.unwatched] on the per-path
+            // signal — when subscribers re-run and stop reading these
+            // removed indices, the slot reclaims itself.
           }
           notifyKeys(raw);
         } else if (newLen > oldLength) {
@@ -313,8 +320,7 @@ const storeHandler: ProxyHandler<object> = {
     if (!ok) return false;
     notifyPath(raw, key);
     notifyKeys(raw);
-    // GC the deleted key's node (after notify scheduled its subscribers).
-    dropNode(raw, key);
+    // GC handled by [Signal.subtle.unwatched] on the per-path signal.
     return true;
   },
 

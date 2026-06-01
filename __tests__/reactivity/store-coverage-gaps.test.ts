@@ -10,6 +10,7 @@ import {
   batch,
   isStore,
   markRaw,
+  Signal,
 } from "../../src/reactivity";
 import { useViewModel } from "../../src";
 
@@ -20,18 +21,20 @@ const flushTwice = async () => {
 };
 
 const NODE_SYM_DESC = "marjoram.node";
-function nodeFor(
+function pathSignalFor(
   raw: object,
   key: string
-): { _subscribers: Set<unknown> } | undefined {
+): Signal<undefined> | undefined {
   const sym = Object.getOwnPropertySymbols(raw).find(
     s => s.description === NODE_SYM_DESC
   );
   if (!sym) return undefined;
-  const nodes = (
-    raw as Record<symbol, Record<string, { _subscribers: Set<unknown> }>>
-  )[sym];
-  return nodes[key];
+  // After v1.2 the per-path tracker is a real signal() — return it so
+  // tests can use the public `Signal.subtle.introspectSinks` to inspect it.
+  const nodes = (raw as Record<symbol, Record<string, Signal<undefined>>>)[
+    sym
+  ];
+  return nodes?.[key];
 }
 
 describe("store() coverage gaps (Phase 7.5c)", () => {
@@ -252,16 +255,28 @@ describe("store() coverage gaps (Phase 7.5c)", () => {
   });
 
   describe("subscription de-dup and multi-effect fan-in", () => {
-    it("reading the same path twice in one effect registers a single subscriber", () => {
+    it("reading the same path twice in one effect registers a single subscriber", async () => {
       const raw = { x: 1 };
       const s = store(raw);
+      let runs = 0;
       effect(() => {
         s.x;
         s.x; // read twice
+        runs++;
       });
-      const node = nodeFor(raw, "x");
-      expect(node).toBeDefined();
-      expect(node!._subscribers.size).toBe(1);
+      expect(runs).toBe(1);
+      // One write → one effect run; if reads double-subscribed, we'd see 2.
+      s.x = 2;
+      await flush();
+      expect(runs).toBe(2);
+
+      // Per-path signal exists and has observers — verifies the store is
+      // using public signals end-to-end (Phase 5 demo). The effect is not
+      // a spec-shaped sink, so we check `hasObservers` (any subscriber),
+      // not `hasSinks` (computed/watcher only).
+      const pathSig = pathSignalFor(raw, "x");
+      expect(pathSig).toBeDefined();
+      expect(Signal.subtle.hasObservers(pathSig!)).toBe(true);
     });
 
     it("N effects on the same path each re-run exactly once per change", async () => {

@@ -9,8 +9,16 @@ export { useViewModel } from "./useViewModel";
 export * from "./widget/createWidget";
 export { createWidget } from "./widget/createWidget";
 
-export { signal, computed, effect, batch, untracked } from "./reactivity";
-export type { Signal, ReadonlySignal } from "./reactivity";
+export {
+  signal,
+  computed,
+  effect,
+  batch,
+  untracked,
+  watcher,
+  Signal,
+} from "./reactivity";
+export type { ReadonlySignal, SignalOptions, Watcher } from "./reactivity";
 
 export {
   store,

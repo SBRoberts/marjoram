@@ -981,6 +981,53 @@ batch(() => {
 dispose(); // stop the effect
 ```
 
+#### Spec-shaped surface (v1.2+)
+
+Marjoram's reactivity layer mirrors the
+[TC39 Signals proposal](https://github.com/tc39/proposal-signals). The
+callable form (`s()` / `s.set(v)`) is the documented DX; the spec-shaped
+methods and `Signal.subtle.*` namespace exist for interop and advanced use:
+
+```typescript
+import { signal, computed, watcher, Signal } from "marjoram";
+
+// .get() / .set() / .peek() — spec-shaped methods on every signal callable
+const count = signal(0);
+count.get(); // 0  (same as count())
+count.set(1);
+count.peek(); // 1 — no tracking
+
+// SignalOptions: per-signal equality + lifecycle hooks
+const user = signal(
+  { id: 1, name: "Alice" },
+  {
+    equals: (a, b) => a.id === b.id,
+    [Signal.subtle.watched]: () => console.log("first consumer arrived"),
+    [Signal.subtle.unwatched]: () => console.log("last consumer left"),
+  }
+);
+
+// Low-level synchronous observer — for custom schedulers; prefer effect()
+const w = watcher(() => {
+  // notify cannot read or write signals (dev-mode throws)
+  for (const s of w.getPending()) {
+    /* schedule something */
+  }
+});
+w.watch(count);
+w.dispose();
+
+// Introspection
+Signal.subtle.hasSinks(count); // boolean — anyone observing?
+Signal.subtle.introspectSources(c); // sources of a computed
+Signal.subtle.currentComputed(); // the computed currently being evaluated
+Signal.subtle.isTracking(); // are we inside any tracked context?
+Signal.subtle.untrack(fn); // same as untracked(fn)
+```
+
+`store()` itself is built on this surface — every per-path tracker is a real
+`signal()` with `equals: () => false` and an `[unwatched]` hook for lazy GC.
+
 ### How it works under the hood
 
 1. **`useViewModel`** wraps each model property in a `signal`
