@@ -1,16 +1,34 @@
 # Stores — Deep Reactivity for Marjoram
 
-> **Status:** Implemented (Phases 0–7.5, merged to `main`). Tracks the work outlined in [STORE_IMPLEMENTATION_PLAN.md](STORE_IMPLEMENTATION_PLAN.md). This document is the public contract; the implementation has been reviewed against it and hardened (see the security and correctness passes in Phase 7.5).
->
-> **Audience:** Two readers. (1) End users deciding whether and how to use `store()`. (2) Contributors implementing or reviewing the work. Sections are flagged where one audience matters more than the other.
+> **Status:** Shipped in v1.1.0. This is the canonical contract for `store()`; the implementation is reviewed and hardened against it. For the "why" behind the design, see [STORE_RESEARCH_FINDINGS.md](STORE_RESEARCH_FINDINGS.md); for the build history, [STORE_IMPLEMENTATION_PLAN.md](STORE_IMPLEMENTATION_PLAN.md).
 
----
+**Quick links:** [API](#4-the-api-surface) · [signal vs store](#3-when-to-use-which) · [granularity](#5-granularity-guarantees) · [what's proxied](#6-boundary-rules--what-gets-proxied) · [templates / useViewModel / repeat](#10-integration-with-the-rest-of-marjoram) · [gotchas](#12-gotchas) · [examples](#14-worked-examples)
+
+## Contents
+
+1. [Overview](#1-overview)
+2. [Why a separate primitive](#2-why-a-separate-primitive)
+3. [When to use which (`signal` vs `store`)](#3-when-to-use-which)
+4. [The API surface](#4-the-api-surface) — `store` · `snapshot` · `subscribe` · `markRaw` · `isStore` / `unwrap`
+5. [Granularity guarantees](#5-granularity-guarantees)
+6. [Boundary rules — what gets proxied](#6-boundary-rules--what-gets-proxied)
+7. [Arrays](#7-arrays)
+8. [Type system](#8-type-system)
+9. [Lifecycle and cleanup](#9-lifecycle-and-cleanup)
+10. [Integration: templates, `useViewModel`, `repeat`, computed/effect](#10-integration-with-the-rest-of-marjoram)
+11. [Comparison to peers](#11-comparison-to-peers)
+12. [Gotchas](#12-gotchas)
+13. [What `store()` deliberately does not do](#13-what-store-deliberately-does-not-do)
+14. [Worked examples](#14-worked-examples)
+15. [Cross-references](#15-cross-references)
+
+> Most sections serve both end users and contributors. A handful of internal-mechanism notes are called out inline.
 
 ## 1. Overview
 
-`store()` is a new reactivity primitive being added as a **peer to `signal()`**. Where `signal()` is shallow and reference-based (good for primitives, atoms, references to whole objects), `store()` is **deep and path-granular**: you can mutate `state.user.address.city = "x"` and only the subscribers to `user.address.city` re-run. No spread/replace ceremony, no `.update(fn)` wrapper, no virtual DOM, no whole-object invalidation.
+`store()` is a reactivity primitive — a **peer to `signal()`**. Where `signal()` is shallow and reference-based (good for primitives, atoms, references to whole objects), `store()` is **deep and path-granular**: you can mutate `state.user.address.city = "x"` and only the subscribers to `user.address.city` re-run. No spread/replace ceremony, no `.update(fn)` wrapper, no virtual DOM, no whole-object invalidation.
 
-Both primitives remain valid. Pick at the import site:
+Both primitives are first-class. Pick at the import site:
 
 ```ts
 import { signal, store } from "marjoram";
@@ -22,9 +40,7 @@ count.set(5);
 state.user.name = "Bob"; // ← just works; subscribers to that path re-run
 ```
 
-This document is the contract `store()` will be held to.
-
-## 2. Why a separate primitive (not "deep by default")
+## 2. Why a separate primitive
 
 Marjoram's existing API is built on **explicitness at the call site**. The `$` prefix rule (`vm.$name` reactive, `vm.name` value) makes reactivity legible to anyone reading the code. A flag like `{ deep: true }` declared once and acting invisibly everywhere would break that contract — the most consequential reactivity (nested state) would become the _least_ visible.
 
@@ -35,7 +51,7 @@ Two named primitives keeps the principle intact:
 
 A reader can predict behavior from the import line alone.
 
-## 3. When to use which (audience: users)
+## 3. When to use which
 
 Choose based on the _shape_ of the state, not its size:
 
@@ -53,18 +69,15 @@ Choose based on the _shape_ of the state, not its size:
 - "I want to write `signal.set(newValue)`" → `signal()`.
 - "It's just a number" → `signal()`. (Wrapping a number in a `store` is technically allowed but pointless; the primitive itself isn't proxiable.)
 
-## 4. The API surface (audience: both)
+## 4. The API surface
 
 The whole public surface, deliberately small:
 
 ```ts
 // Core
-export function store<T extends object>(
-  initial: T,
-  options?: StoreOptions
-): Store<T>;
+export function store<T extends object>(initial: T): Store<T>;
 
-// Type
+// Type — structurally T, with a phantom brand for isStore() narrowing.
 export type Store<T extends object> = T & { readonly [__brand]: "Store" };
 
 // Inspect & escape hatches
@@ -93,15 +106,9 @@ export type PathValue<
   T,
   P extends string,
 > = /* resolves path to value type */ unknown;
-
-// Options
-export interface StoreOptions {
-  /** Optional name for devtools display and dev-mode warnings. */
-  name?: string;
-}
 ```
 
-### 4.1 `store(initial, options?)`
+### 4.1 `store(initial)`
 
 Wraps a plain object or array in a deeply reactive proxy. Returns a value that **is** structurally `T` (you can pass it anywhere `T` is expected) but is also reactive: reads inside a `computed`/`effect`/`html` template track the exact paths touched, and writes notify only subscribers to the affected paths.
 
@@ -181,7 +188,7 @@ if (isStore(value)) {
 }
 ```
 
-## 5. Granularity guarantees (audience: both)
+## 5. Granularity guarantees
 
 This is the load-bearing contract. Implementations and tests will assert it exactly.
 
@@ -250,7 +257,7 @@ batch(() => {
 }); // ← effects re-run once, not twice
 ```
 
-## 6. Boundary rules — what gets proxied (audience: both)
+## 6. Boundary rules — what gets proxied
 
 A store proxies **only plain objects and arrays**. Everything else is stored and returned by reference, unmodified. The boundary is checked once at proxy-creation time per nested value.
 
@@ -270,7 +277,7 @@ A store proxies **only plain objects and arrays**. Everything else is stored and
 
 **Consequence for users:** if you want reactive `Map` or `Set`, you store a plain object/array. Reactive `Map`/`Set` variants are explicitly out of scope for v1.1 (see §13).
 
-## 7. Arrays (audience: both)
+## 7. Arrays
 
 Arrays are first-class. Three subtleties to call out:
 
@@ -278,9 +285,9 @@ Arrays are first-class. Three subtleties to call out:
 2. **Mutating methods produce a single notification round.** `arr.push(a, b, c)` notifies subscribers to indices `length`, `length+1`, `length+2`, and `length` itself — but they fire in one batched round, so a single effect re-runs once, not four times. Same for `pop`, `shift`, `unshift`, `splice`, `sort`, `reverse`, `fill`, `copyWithin`.
 3. **Read methods work via the normal proxy `get` path.** `map`, `filter`, `forEach`, `find`, `reduce`, `slice`, `concat`, `join`, `includes`, `indexOf`, `some`, `every`, `findIndex` — no special-casing. They iterate, the proxy registers the dependency, done.
 
-`repeat()` (see [README.md](../README.md#repeat--keyed-list-reconciliation)) consumes store arrays directly. The integration is one of the deliverables in Phase 4.
+`repeat()` (see [README.md](../README.md#repeat--keyed-list-reconciliation)) consumes store arrays directly — see §10.3.
 
-## 8. Type system (audience: both)
+## 8. Type system
 
 `Store<T>` preserves `T` structurally through arbitrary depth. There is no `unknown`, no loss of generic parameters, no need for `as` casts.
 
@@ -314,7 +321,7 @@ The `Store<T>` brand is a phantom `unique symbol` property so that:
 
 But: at any read site, the brand is transparent — you write `state.user.name` not `state.user.name.value` or anything similar. **There is no `.value` ceremony.** This is the headline DX win over Vue's `ref`.
 
-## 9. Lifecycle and cleanup (audience: both)
+## 9. Lifecycle and cleanup
 
 ### 9.1 Ownership
 
@@ -335,7 +342,7 @@ This matters because long-lived stores with churning data (e.g., a list of 100k 
 
 `store()` does not return a `.dispose()` method. Disposal is implicit via the ownership chain: when the owning scope tears down, the store's subscribers are notified and the path tree is dropped. This matches `useViewModel`'s existing implicit-cleanup model. Users with exotic lifecycle needs can wrap a store in a custom scope.
 
-## 10. Integration with the rest of Marjoram (audience: both)
+## 10. Integration with the rest of Marjoram
 
 ### 10.1 `html` templates
 
@@ -405,23 +412,23 @@ Zero changes required. Stores expose their tracked paths as `SignalNode`s — th
 
 This is the central architectural win: there is no parallel reactivity system to maintain.
 
-## 11. Comparison to peers (audience: users + contributors)
+## 11. Comparison to peers
 
 Honest. Where competitors are better, we say so.
 
-| Feature                                     | Marjoram `store` (this proposal) | Solid `createStore` | Vue 3 `reactive`                    | Valtio `proxy`    | MobX `observable` |
-| ------------------------------------------- | -------------------------------- | ------------------- | ----------------------------------- | ----------------- | ----------------- |
-| Deep reactive                               | ✅                               | ✅                  | ✅                                  | ✅                | ✅                |
-| Path-level granularity                      | ✅                               | ✅                  | ✅                                  | ✅                | partial           |
-| Mutable-feeling API                         | ✅                               | ⚠️ explicit setter  | ✅                                  | ✅                | ✅                |
-| Plain object/array only (no class wrapping) | ✅                               | ✅                  | partial (uses `markRaw` to opt out) | ✅                | needs config      |
-| Atomic multi-path updates                   | via `batch()`                    | ✅ path-setter      | via `batch`                         | via `batch`       | via `action`      |
-| `Map`/`Set` reactive variants               | ❌ (deferred)                    | ❌                  | ✅                                  | ✅                | ✅                |
-| Snapshot to plain object                    | ✅ `snapshot()`                  | ✅ `unwrap`/manual  | ✅ `toRaw` (shallow)                | ✅ `snapshot`     | partial           |
-| Devtools custom formatter                   | ✅ (planned)                     | ❌                  | ✅                                  | ❌                | ✅                |
-| Type-preserving through depth               | ✅                               | ✅                  | ✅                                  | partial           | partial           |
-| Zero runtime dependencies                   | ✅                               | ✅                  | ❌                                  | ❌                | ❌                |
-| Library size (whole lib gzipped)            | ~5KB target                      | ~7KB                | ~34KB                               | ~3KB (just store) | ~16KB             |
+| Feature                                     | Marjoram `store` | Solid `createStore` | Vue 3 `reactive`                    | Valtio `proxy`    | MobX `observable` |
+| ------------------------------------------- | ---------------- | ------------------- | ----------------------------------- | ----------------- | ----------------- |
+| Deep reactive                               | ✅               | ✅                  | ✅                                  | ✅                | ✅                |
+| Path-level granularity                      | ✅               | ✅                  | ✅                                  | ✅                | partial           |
+| Mutable-feeling API                         | ✅               | ⚠️ explicit setter  | ✅                                  | ✅                | ✅                |
+| Plain object/array only (no class wrapping) | ✅               | ✅                  | partial (uses `markRaw` to opt out) | ✅                | needs config      |
+| Atomic multi-path updates                   | via `batch()`    | ✅ path-setter      | via `batch`                         | via `batch`       | via `action`      |
+| `Map`/`Set` reactive variants               | ❌ (deferred)    | ❌                  | ✅                                  | ✅                | ✅                |
+| Snapshot to plain object                    | ✅ `snapshot()`  | ✅ `unwrap`/manual  | ✅ `toRaw` (shallow)                | ✅ `snapshot`     | partial           |
+| Devtools custom formatter                   | ✅ (planned)     | ❌                  | ✅                                  | ❌                | ✅                |
+| Type-preserving through depth               | ✅               | ✅                  | ✅                                  | partial           | partial           |
+| Zero runtime dependencies                   | ✅               | ✅                  | ❌                                  | ❌                | ❌                |
+| Library size (whole lib gzipped)            | ~5KB target      | ~7KB                | ~34KB                               | ~3KB (just store) | ~16KB             |
 
 **Where competitors are honestly better:**
 
@@ -429,7 +436,7 @@ Honest. Where competitors are better, we say so.
 - **Vue's reactive `Map`/`Set`.** Deferred — adding them is a real cost in bundle size and complexity that we don't think pays rent for the typical embeddable-widget use case. Revisit in v1.3+ if demand is real.
 - **MobX's `action` boundaries** for clearer transactional semantics. Our answer is `batch()`, which is functionally equivalent but less semantically opinionated.
 
-## 12. Gotchas — document these up front (audience: users)
+## 12. Gotchas
 
 Failure modes we know exist and how to think about them.
 
@@ -474,9 +481,9 @@ raw.user.name = "Bob"; // ← no notification — you bypassed reactivity
 
 If you write through `unwrap`, you broke the contract on purpose. Re-read through the proxy after.
 
-## 13. What this design explicitly does NOT do (audience: both)
+## 13. What `store()` deliberately does not do
 
-Scope guard — features we considered and rejected (for v1.1):
+Scope guard — features considered and deliberately left out of v1.1:
 
 - **Reactive `Map`/`Set`.** Real complexity for narrow benefit in the embeddable-widget use case. Defer to v1.3 if demand is real.
 - **Time-travel / undo built-in.** `snapshot()` is the primitive; building undo on top is a 30-line userland helper.
@@ -486,22 +493,9 @@ Scope guard — features we considered and rejected (for v1.1):
 - **Cross-store derivations as a built-in primitive.** Already covered by `computed()` reading from multiple stores.
 - **Server/client serialization protocol.** `snapshot()` is the building block; SSR hydration is a downstream library, not a primitive concern.
 
-## 14. Open questions
+## 14. Worked examples
 
-All previously-open design questions have been resolved by the research pass documented in [STORE_RESEARCH_FINDINGS.md](STORE_RESEARCH_FINDINGS.md):
-
-| ID  | Question                                                 | Resolution                        | Reason                                                                                      |
-| --- | -------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------- |
-| 1   | Auto-store nested plain objects in `useViewModel`?       | **No** — explicit `store()` only  | Non-breaking-change rule (see [STORE_IMPLEMENTATION_PLAN.md](STORE_IMPLEMENTATION_PLAN.md)) |
-| 2   | `produce`-style transactions?                            | **No** — `batch()` covers it      | Valtio ships without; structural-sharing cost not worth it                                  |
-| 3   | Method-vs-data collision policy on path-binding proxies? | **Method wins, dev-mode warning** | Matches Vue's `.value` precedent                                                            |
-| 4   | `subscribe()` accepts a path filter?                     | **Yes — compile-time-typed path** | See §4.3, §8                                                                                |
-
-Phase 2 implementation can proceed.
-
-## 15. Worked examples (audience: users)
-
-### 15.1 A nested form
+### 14.1 A nested form
 
 ```ts
 import { createWidget, html, useViewModel, store, when } from "marjoram";
@@ -550,7 +544,7 @@ createWidget<FormState>({
 
 The granularity guarantee: typing in the name field re-renders _only_ the name input's binding and the `isValid` computed (which the disabled state and `when` depend on). The email input is untouched.
 
-### 15.2 A keyed todo list
+### 14.2 A keyed todo list
 
 ```ts
 import { createWidget, html, useViewModel, store, repeat } from "marjoram";
@@ -601,10 +595,12 @@ vm.todos.find(t => t.id === 1).done = true;
 // Only that <li>'s checkbox attribute updates.
 ```
 
-## 16. Cross-references
+## 15. Cross-references
 
-- [STORE_IMPLEMENTATION_PLAN.md](STORE_IMPLEMENTATION_PLAN.md) — phased implementation roadmap, versioning, non-breaking-change rules.
-- [src/reactivity/signal.ts](../src/reactivity/signal.ts) — existing primitives stores will compose with.
-- [src/schema/schemaPropFactory.ts](../src/schema/schemaPropFactory.ts) — the `SchemaProp` shape that path-binding proxies will conform to.
-- [src/view/external/repeat.ts](../src/view/external/repeat.ts) — keyed list reconciler stores will integrate with.
-- [CLAUDE.md](../CLAUDE.md) §4, §5, §7 — the project conventions and anti-patterns this design respects.
+- [STORE_IMPLEMENTATION_PLAN.md](STORE_IMPLEMENTATION_PLAN.md) — the build history, versioning, and non-breaking-change rules (historical).
+- [STORE_RESEARCH_FINDINGS.md](STORE_RESEARCH_FINDINGS.md) — competitor-source review that shaped the design decisions (historical).
+- [src/reactivity/store.ts](../src/reactivity/store.ts) — the implementation.
+- [src/reactivity/signal.ts](../src/reactivity/signal.ts) — primitives stores compose with.
+- [src/schema/schemaPropFactory.ts](../src/schema/schemaPropFactory.ts) — `SchemaProp` shape that path-binding proxies conform to.
+- [src/view/external/repeat.ts](../src/view/external/repeat.ts) — keyed list reconciler integrated with store arrays.
+- [CLAUDE.md](../CLAUDE.md) §4, §5, §7 — project conventions and anti-patterns the design respects.
