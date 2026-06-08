@@ -7,11 +7,30 @@
 //
 // Implementation note (v1.2): every per-path tracking node is a real
 // `signal()` carrying `equals: () => false` and `[Signal.subtle.unwatched]`
-// for lazy GC. No internal escape hatches into reactivity — the entire
-// deep-reactivity surface is built from the public primitives that the
-// TC39 Signals proposal defines (plus the small `Signal.subtle.isTracking`
-// extension). This doubles as a worked example that the spec primitives
-// are sufficient for deep reactivity.
+// for lazy GC. No reach into private signal state — the deep-reactivity
+// surface is built from the public TC39 Signals primitives, plus two
+// extensions to the public `Signal.subtle` namespace:
+//   - `Signal.subtle.isTracking()` — the tracking predicate (trackPath /
+//     trackKeys) that keeps untracked reads allocation-free.
+//   - `Signal.subtle.hasObservers()` — the GC gate in the `[unwatched]` hook:
+//     reclaim a path slot only when no subscriber of any kind remains. The
+//     spec's `hasSinks` is liveness-gated (it excludes a computed that read the
+//     node but is not itself watched), so a spec-`hasSinks` gate would evict
+//     while a dormant computed still depends on the slot — orphaning it.
+//     Verified in __tests__/reactivity/spec-gc-strategies.test.ts.
+//
+// These buy efficiency, not possibility. Deep, path-granular reactivity with
+// bounded memory under key churn IS expressible on the public primitives
+// alone: `[unwatched]` cannot `.set()` (frozen-callback rule, enforced at
+// signal.ts:259), so a spec-pure store would defer — schedule a microtask,
+// track liveness via the watched/unwatched hooks, and if still dormant
+// `set(undefined)` then delete the node; a dormant computed re-links to a
+// fresh node on its next read. The cost of that variant is one spurious
+// recompute per dormant reader at GC time. `hasObservers` lets store() skip
+// it — reclaim only when truly unreferenced, never disturb a dormant reader.
+// The tradeoff cuts both ways: this strategy waits for the last edge to drop,
+// so an immortal dormant computed can pin a slot, whereas the deferred variant
+// always reclaims promptly. Neither dominates.
 //
 // Design contract: docs/STORES.md.
 // Patterns verified against competitor source: docs/STORE_RESEARCH_FINDINGS.md.
@@ -138,11 +157,16 @@ function ensurePathSignal(nodes: NodeMap, key: PropertyKey): PathSignal {
     const created: PathSignal = signal<undefined>(undefined, {
       equals: () => false,
       [Signal.subtle.unwatched]: () => {
-        // Reclaim the slot only when no readers remain at all — a non-live
-        // computed reader (no downstream watcher) still needs the same
-        // signal identity to be notified when the path changes later.
-        // hasObservers (Marjoram extension) counts ANY subscriber type,
-        // including effects; the spec-shaped `hasSinks` would miss those.
+        // Reclaim the slot only when no subscriber remains at all. At this
+        // edge the remaining subscriber, if any, is always a dormant computed
+        // (read the path, no live downstream) — effects are live consumers and
+        // are removed before [unwatched] fires. That dormant computed still
+        // needs this exact signal identity to be notified when the path changes
+        // later, so eviction here would orphan it. hasObservers counts any
+        // subscriber and sees it. The spec's `hasSinks` is liveness-gated — it
+        // excludes an unwatched computed sink — so a spec-`hasSinks` gate would
+        // evict and orphan the reader (proven in
+        // __tests__/reactivity/spec-gc-strategies.test.ts).
         if (!Signal.subtle.hasObservers(created)) delete nodes[key];
       },
     });
