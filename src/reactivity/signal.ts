@@ -7,7 +7,7 @@
 //   effect(fn)                — side-effect that re-runs on dependency change
 //   batch(fn)                 — defer notifications until the callback completes
 //   untracked(fn)             — read signals without subscribing
-//   watcher(notify)           — TC39-shaped low-level observer
+//   watcher(notify)           — TC39-shaped observer (notify auto-re-arms)
 //
 // Memoization is epoch/version-based: every node carries a monotonic
 // `_version` bumped only on actual value change. Subscribers record the
@@ -83,13 +83,22 @@ export interface SignalOptions<T = unknown> {
 }
 
 /**
- * Low-level synchronous observer, modeled on `Signal.subtle.Watcher` from
- * the TC39 Signals proposal. `notify` fires synchronously when a watched
- * signal becomes stale. The callback must not read or write signals —
- * dev-mode builds throw if it tries.
+ * Low-level synchronous observer in the shape of `Signal.subtle.Watcher`
+ * from the TC39 Signals proposal: `watch`/`unwatch`/`getPending`/`dispose`,
+ * a `notify` that fires synchronously when a watched signal becomes stale,
+ * and a callback that must not read or write signals (dev-mode builds throw).
  *
- * Use it to build custom schedulers; for everyday side effects, use
- * `effect()`, which internally builds on this primitive.
+ * Deliberate divergence from the spec contract: the spec's `notify` is
+ * *one-shot* — it fires once on the clean→stale transition and stays quiet
+ * until you re-arm via `watch()`. Marjoram's `notify` instead re-arms
+ * automatically and fires on *every* qualifying change (see the smoke test
+ * in `__tests__/reactivity/watcher.test.ts`). It is an "observe all changes"
+ * observer, not a one-shot scheduler hook; consumers porting spec-style code
+ * (notify → drain `getPending()` → `watch()` to re-arm) should know the
+ * explicit re-arm is a no-op here.
+ *
+ * Use it to build custom schedulers. For everyday side effects use `effect()`,
+ * which is an independent primitive — it does NOT build on `watcher()`.
  */
 export interface Watcher {
   watch(...signals: (Signal<unknown> | ReadonlySignal<unknown>)[]): void;
@@ -568,9 +577,11 @@ export function untracked<T>(fn: () => T): T {
 }
 
 // ---------------------------------------------------------------------------
-// watcher() — low-level synchronous observer (TC39 Signal.subtle.Watcher
-// shape). For custom schedulers and framework authors; effect() is the
-// ergonomic choice for everyday work.
+// watcher() — low-level synchronous observer in the `Signal.subtle.Watcher`
+// shape. NOTE: notify auto-re-arms (fires on every qualifying change), unlike
+// the spec's one-shot notify. For custom schedulers and framework authors;
+// effect() is the ergonomic choice for everyday work (and is independent of
+// this primitive).
 // ---------------------------------------------------------------------------
 
 export function watcher(notify: () => void): Watcher {
