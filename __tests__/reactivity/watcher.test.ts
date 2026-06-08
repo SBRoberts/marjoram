@@ -9,6 +9,10 @@ describe("Watcher smoke", () => {
     expect(calls).toBe(0);
     s.set(2);
     expect(calls).toBe(1);
+    // Auto-re-arm: unlike the spec's one-shot Watcher (which would require a
+    // watch() re-arm before firing notify again), Marjoram's notify fires on
+    // every qualifying change. This divergence is intentional — see the
+    // `Watcher` interface doc in src/reactivity/signal.ts.
     s.set(3);
     expect(calls).toBe(2);
     w.dispose();
