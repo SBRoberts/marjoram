@@ -1,6 +1,6 @@
 {
   "name": "marjoram",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Widget SDK toolkit — reactive state, template binding, and DOM isolation in under 5KB with zero dependencies",
   "keywords": [
     "dom",

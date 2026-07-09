@@ -8,10 +8,14 @@ import { readFileSync } from "fs";
 // Read package.json using Node.js fs module to avoid mixed module syntax
 const pkg = JSON.parse(readFileSync("./package.json", "utf8"));
 
-const external = ["tslib"];
-const globals = {
-  tslib: "tslib",
-};
+// Bundle everything — including TypeScript's emit helpers (tslib) — into the
+// output so the published artifact has ZERO external imports. tslib is a
+// devDependency only; marking it external emitted a bare `import ... from
+// "tslib"` that threw at runtime for any consumer who (correctly) doesn't have
+// tslib installed. Keeping these empty enforces the zero-runtime-dependency
+// contract at the bundle boundary. See __tests__/packaging/self-contained.test.ts.
+const external = [];
+const globals = {};
 
 export default [
   // UMD build for browsers
